@@ -182,6 +182,10 @@ function dedupeLaws(laws: Law[], state: string, city: string): Law[] {
   return [...byKey.values()];
 }
 
+export function mergeCanonicalLaws(existingLaws: Law[], incomingLaws: Law[], state: string, city: string): Law[] {
+  return dedupeLaws([...existingLaws, ...incomingLaws], state, city);
+}
+
 function buildHearings(law: Partial<Law>, city: string): HearingEvent[] {
   const date = law.date || new Date().toLocaleDateString();
   return [{
@@ -351,8 +355,9 @@ function ensureJurisdictionCoverage(laws: Law[], state: string, city: string): L
 }
 
 function enrichLaws(laws: Law[], state: string, city: string): Law[] {
-  return dedupeLaws(ensureJurisdictionCoverage(laws, state, city), state, city).map((law, index) => {
-    const related = laws
+  const canonicalLaws = dedupeLaws(ensureJurisdictionCoverage(laws, state, city), state, city);
+  return canonicalLaws.map((law, index) => {
+    const related = canonicalLaws
       .filter(candidate => candidate.id !== law.id && (candidate.category === law.category || candidate.level === law.level))
       .slice(0, 3)
       .map(candidate => candidate.id);

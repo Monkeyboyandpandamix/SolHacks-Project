@@ -43,7 +43,7 @@ import RepresentativeCard from './components/RepresentativeCard';
 import AILawyer from './components/AILawyer';
 import CommunityView from './components/CommunityView';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
-import { fetchLaws } from './services/geminiService';
+import { fetchLaws, mergeCanonicalLaws } from './services/geminiService';
 
 import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
 import { collection, doc, getDoc, setDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
@@ -161,39 +161,44 @@ export default function App() {
     setError(null);
     try {
       // 1. Check Cache in Firestore
-      const cacheKey = `v3_${settings.location.state}_${settings.location.city}_${settings.language}`;
+      const cacheKey = `v4_${settings.location.state}_${settings.location.city}_${settings.language}`;
       const cacheRef = doc(db, 'laws_cache', cacheKey);
       let data: Law[] = [];
+      let cachedLaws: Law[] = [];
+      let cacheLastUpdated = 0;
       const CACHE_LIMIT = 4 * 60 * 60 * 1000; // 4 hours
 
       try {
         const cacheDoc = await getDoc(cacheRef);
         if (cacheDoc.exists()) {
           const cacheData = cacheDoc.data();
-          const lastUpdated = new Date(cacheData.lastUpdated).getTime();
-          const now = new Date().getTime();
-          
-          if (now - lastUpdated < CACHE_LIMIT) {
+          cacheLastUpdated = new Date(cacheData.lastUpdated).getTime();
+          cachedLaws = Array.isArray(cacheData.laws) ? cacheData.laws : [];
+          if (cachedLaws.length > 0) {
             console.log("Using cached laws from Firestore");
-            data = cacheData.laws;
+            data = cachedLaws;
           }
         }
       } catch (cacheReadErr) {
         console.warn("Failed to read Firestore cache", cacheReadErr);
       }
 
-      // 2. If no cache or expired, fetch from APIs
-      if (data.length === 0) {
+      const now = new Date().getTime();
+      const shouldRefresh = cachedLaws.length === 0 || now - cacheLastUpdated >= CACHE_LIMIT;
+
+      // 2. If cache is missing or stale, fetch fresh laws and merge only new canonical entries
+      if (shouldRefresh) {
         console.log("Fetching fresh laws from APIs");
-        data = await fetchLaws(
+        const freshLaws = await fetchLaws(
           settings.location.state, 
           settings.location.city, 
           settings.language,
           userProfile?.situation,
           'all'
         );
-        
-        // Update Cache
+
+        data = mergeCanonicalLaws(cachedLaws, freshLaws, settings.location.state, settings.location.city);
+
         if (data.length > 0) {
           try {
             await setDoc(cacheRef, {
