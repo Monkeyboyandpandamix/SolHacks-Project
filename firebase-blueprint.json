@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile containing situation, location, and interests.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "situation": { "type": "string" },
+        "location": {
+          "type": "object",
+          "properties": {
+            "state": { "type": "string" },
+            "city": { "type": "string" },
+            "zipCode": { "type": "string" }
+          }
+        },
+        "interests": { "type": "array", "items": { "type": "string" } },
+        "followedTopics": { "type": "array", "items": { "type": "string" } },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["uid", "email", "location", "lastUpdated"]
+    },
+    "Law": {
+      "title": "Law",
+      "description": "Cached legislative data.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "originalText": { "type": "string" },
+        "simplifiedSummary": { "type": "string" },
+        "impact": { "type": "string" },
+        "category": { "type": "string" },
+        "level": { "type": "string", "enum": ["federal", "state", "county", "city"] },
+        "status": { "type": "string", "enum": ["proposed", "passed", "rejected", "updated"] },
+        "location": {
+          "type": "object",
+          "properties": {
+            "state": { "type": "string" },
+            "city": { "type": "string" }
+          }
+        },
+        "date": { "type": "string" },
+        "sourceUrl": { "type": "string" },
+        "lastUpdated": { "type": "string" }
+      },
+      "required": ["id", "title", "simplifiedSummary", "impact", "category", "level", "status", "date", "lastUpdated"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Community comment on a law.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "text": { "type": "string" },
+        "date": { "type": "string" },
+        "lawId": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "text", "date", "lawId"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profiles."
+    },
+    "/laws/{lawId}": {
+      "schema": "Law",
+      "description": "Cached laws."
+    },
+    "/laws/{lawId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments for a specific law."
+    }
+  }
+}

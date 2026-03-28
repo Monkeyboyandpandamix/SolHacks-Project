@@ -1,0 +1,1094 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Bookmark, 
+  LayoutGrid, 
+  MessageSquare, 
+  Info, 
+  AlertTriangle, 
+  Scale, 
+  LayoutDashboard, 
+  Map, 
+  User as UserIcon, 
+  MapPin, 
+  Bell, 
+  Settings,
+  Search,
+  Filter,
+  ChevronRight,
+  TrendingUp,
+  Globe,
+  Building2,
+  Users,
+  Zap,
+  CheckCircle,
+  AlertCircle,
+  Landmark,
+  ShieldCheck,
+  History,
+  BarChart3,
+  XCircle
+} from 'lucide-react';
+import Header from './components/Header';
+import LocationSelector from './components/LocationSelector';
+import LawFeed from './components/LawFeed';
+import LawCard from './components/LawCard';
+import CompareLaws from './components/CompareLaws';
+import MapView from './components/MapView';
+import RoadmapView from './components/RoadmapView';
+import AnalyticsView from './components/AnalyticsView';
+import RepresentativeCard from './components/RepresentativeCard';
+import AILawyer from './components/AILawyer';
+import { Law, UserSettings, Notification, Comment, UserProfile, BookmarkCollection } from './types';
+import { fetchLaws, moderateComment, getRepresentativesForLocation } from './services/geminiService';
+
+import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+export default function App() {
+  const [user, setUser] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [settings, setSettings] = useState<UserSettings>(() => {
+    const saved = localStorage.getItem('civiclens_settings');
+    return saved ? JSON.parse(saved) : {
+      highContrast: false,
+      largeFont: false,
+      language: "English",
+      location: {
+        state: "California",
+        city: "San Francisco"
+      },
+      interests: []
+    };
+  });
+
+  const [laws, setLaws] = useState<Law[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics'>('feed');
+  const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'county' | 'city'>('all');
+  const [interestFilter, setInterestFilter] = useState<string>('all');
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showLocationSelector, setShowLocationSelector] = useState(false);
+  const [lawsToCompare, setLawsToCompare] = useState<Law[]>([]);
+  const [bookmarkCollections, setBookmarkCollections] = useState<BookmarkCollection[]>(() => {
+    const saved = localStorage.getItem('civiclens_collections');
+    return saved ? JSON.parse(saved) : [{ id: 'default', name: 'My Civic Watchlist', lawIds: [] }];
+  });
+
+  // Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Fetch or create profile
+        try {
+          const profileDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (profileDoc.exists()) {
+            setUserProfile(profileDoc.data() as UserProfile);
+          } else {
+            const newProfile: UserProfile = {
+              uid: currentUser.uid,
+              email: currentUser.email || '',
+              location: settings.location,
+              interests: settings.interests || [],
+              followedTopics: [],
+              lastUpdated: new Date().toISOString()
+            };
+            await setDoc(doc(db, 'users', currentUser.uid), newProfile);
+            setUserProfile(newProfile);
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}`);
+        }
+      } else {
+        setUserProfile(null);
+      }
+    });
+    return () => unsubscribe();
+  }, [settings.location, settings.interests]);
+
+  const loadLaws = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const cacheKey = `${settings.location.state}_${settings.location.city}_${settings.language}`;
+      let data: Law[] = [];
+      const CACHE_LIMIT = 4 * 60 * 60 * 1000; // 4 hours
+
+      try {
+        const cacheValue = localStorage.getItem(`civiclens_cache_${cacheKey}`);
+        if (cacheValue) {
+          const cacheData = JSON.parse(cacheValue);
+          const lastUpdated = new Date(cacheData.lastUpdated || 0).getTime();
+          const now = new Date().getTime();
+
+          if (now - lastUpdated < CACHE_LIMIT) {
+            console.log("Using cached laws from local storage");
+            data = cacheData.laws;
+          }
+        }
+      } catch (cacheReadErr) {
+        console.warn("Failed to read local cache", cacheReadErr);
+      }
+
+      if (data.length === 0) {
+        console.log("Fetching fresh laws from APIs");
+        data = await fetchLaws(
+          settings.location.state, 
+          settings.location.city, 
+          settings.language,
+          userProfile?.situation
+        );
+
+        if (data.length > 0) {
+          try {
+            localStorage.setItem(`civiclens_cache_${cacheKey}`, JSON.stringify({
+              laws: data,
+              lastUpdated: new Date().toISOString()
+            }));
+          } catch (cacheErr) {
+            console.warn("Failed to update local cache", cacheErr);
+          }
+        }
+      }
+      
+      if (data.length === 0) {
+        setError("No laws found for your location. Try adjusting your settings.");
+      }
+      
+      // Merge with saved status from local storage (or Firestore later)
+      const savedIds = JSON.parse(localStorage.getItem('civiclens_saved') || '[]');
+      const processedLaws = data.map(law => ({
+        ...law,
+        saved: savedIds.includes(law.id)
+      }));
+      
+      setLaws(processedLaws);
+    } catch (err) {
+      setError("Failed to load laws. Please try again.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [settings.location, settings.language, userProfile?.situation]);
+
+  useEffect(() => {
+    loadLaws();
+  }, [loadLaws]);
+
+  useEffect(() => {
+    localStorage.setItem('civiclens_settings', JSON.stringify(settings));
+    document.body.classList.toggle('high-contrast', settings.highContrast);
+    document.body.classList.toggle('large-font', settings.largeFont);
+  }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem('civiclens_collections', JSON.stringify(bookmarkCollections));
+  }, [bookmarkCollections]);
+
+  useEffect(() => {
+    if (laws.length === 0) return;
+    const actionable = laws.filter(law =>
+      law.status === 'proposed' &&
+      (law.saved || userProfile?.followedTopics.some(topic => law.category.toLowerCase().includes(topic.toLowerCase())))
+    );
+    const autoNotifications = actionable.slice(0, 3).map(law => ({
+      id: `alert-${law.id}`,
+      title: 'Action Needed',
+      message: `${law.title} is active and matches your saved laws or followed topics.`,
+      date: law.date,
+      read: false,
+      type: 'alert' as const,
+      lawId: law.id,
+    }));
+    setNotifications(prev => {
+      const existing = new Set(prev.map(item => item.id));
+      return [...prev, ...autoNotifications.filter(item => !existing.has(item.id))];
+    });
+  }, [laws, userProfile?.followedTopics]);
+
+  const handleSaveSituation = async (situation: string) => {
+    if (!user) {
+      signIn();
+      return;
+    }
+    try {
+      const updatedProfile = { ...userProfile!, situation, lastUpdated: new Date().toISOString() };
+      await setDoc(doc(db, 'users', user.uid), updatedProfile);
+      setUserProfile(updatedProfile);
+      loadLaws(); // Reload laws with new context
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  };
+
+  const handleToggleFollowTopic = async (topic: string) => {
+    if (!user) {
+      signIn();
+      return;
+    }
+    try {
+      const topics = userProfile?.followedTopics.includes(topic) 
+        ? userProfile.followedTopics.filter(t => t !== topic)
+        : [...(userProfile?.followedTopics || []), topic];
+      const updatedProfile = { ...userProfile!, followedTopics: topics, lastUpdated: new Date().toISOString() };
+      await setDoc(doc(db, 'users', user.uid), updatedProfile);
+      setUserProfile(updatedProfile);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  };
+
+  const handleUpdateSettings = (newSettings: Partial<UserSettings>) => {
+    setSettings(prev => ({ ...prev, ...newSettings }));
+  };
+
+  const handleLocationChange = (state: string, city: string, language: string) => {
+    setSettings(prev => ({
+      ...prev,
+      location: { state, city },
+      language
+    }));
+  };
+
+  const handleSaveLaw = (id: string) => {
+    setLaws(prev => {
+      const updated = prev.map(law => 
+        law.id === id ? { ...law, saved: !law.saved } : law
+      );
+      
+      const savedIds = updated.filter(l => l.saved).map(l => l.id);
+      localStorage.setItem('civiclens_saved', JSON.stringify(savedIds));
+      
+      return updated;
+    });
+  };
+
+  const handleCompare = (law: Law) => {
+    setLawsToCompare(prev => {
+      if (prev.find(l => l.id === law.id)) {
+        return prev.filter(l => l.id !== law.id);
+      }
+      if (prev.length >= 2) {
+        return [prev[1], law];
+      }
+      return [...prev, law];
+    });
+  };
+
+  const handleVote = (id: string, type: 'support' | 'oppose') => {
+    setLaws(prev => prev.map(law => {
+      if (law.id !== id) return law;
+      
+      const isRemoving = law.userVote === type;
+      const newVote = isRemoving ? undefined : type;
+      
+      const votes = { ...law.votes! };
+      if (isRemoving) {
+        votes[type]--;
+      } else {
+        if (law.userVote) {
+          votes[law.userVote]--;
+        }
+        votes[type]++;
+      }
+      
+      return { ...law, userVote: newVote, votes };
+    }));
+  };
+
+  const handleComment = async (id: string, text: string) => {
+    const moderation = await moderateComment(text);
+    const newComment: Comment = {
+      id: Math.random().toString(36).substr(2, 9),
+      userId: 'user-1',
+      userName: 'You',
+      text,
+      date: new Date().toLocaleDateString(),
+      status: moderation.approved ? 'published' : 'flagged',
+      moderationNote: moderation.reason,
+    };
+
+    setLaws(prev => prev.map(law => {
+      if (law.id === id) {
+        return { ...law, comments: [newComment, ...(law.comments || [])] };
+      }
+      return law;
+    }));
+
+    if (!moderation.approved) {
+      setNotifications(prev => [{
+        id: `moderation-${newComment.id}`,
+        title: 'Comment Held',
+        message: moderation.reason || 'Your comment was flagged for review.',
+        date: newComment.date,
+        read: false,
+        type: 'moderation',
+        lawId: id,
+      }, ...prev]);
+    }
+  };
+
+  const handleAddImpactStory = (id: string, text: string) => {
+    if (!text.trim()) return;
+    setLaws(prev => prev.map(law => {
+      if (law.id !== id) return law;
+      const story = {
+        id: `story-${Math.random().toString(36).slice(2, 9)}`,
+        author: user?.email?.split('@')[0] || 'Community Member',
+        text,
+        date: new Date().toLocaleDateString(),
+        verified: Boolean(user),
+      };
+      return { ...law, impactStories: [story, ...(law.impactStories || [])] };
+    }));
+  };
+
+  const handleSaveToCollection = (id: string, collectionId: string) => {
+    setBookmarkCollections(prev => prev.map(collection => {
+      if (collection.id !== collectionId) return collection;
+      const exists = collection.lawIds.includes(id);
+      return {
+        ...collection,
+        lawIds: exists ? collection.lawIds.filter(lawId => lawId !== id) : [...collection.lawIds, id],
+      };
+    }));
+  };
+
+  const handlePollVote = (id: string, optionLabel: string) => {
+    setLaws(prev => prev.map(law => {
+      if (law.id === id && law.poll) {
+        const options = law.poll.options.map(opt => {
+          if (opt.label === optionLabel) {
+            return { ...opt, count: opt.count + 1 };
+          }
+          if (opt.label === law.poll?.userChoice) {
+            return { ...opt, count: Math.max(0, opt.count - 1) };
+          }
+          return opt;
+        });
+        return { ...law, poll: { ...law.poll, options, userChoice: optionLabel } };
+      }
+      return law;
+    }));
+  };
+
+  const handleMarkNotificationRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  const handleClearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const filteredLaws = laws.filter(law => {
+    const matchesLevel = levelFilter === 'all' || law.level === levelFilter;
+    const matchesInterest = interestFilter === 'all' || law.category.toLowerCase().includes(interestFilter.toLowerCase());
+    return matchesLevel && matchesInterest;
+  });
+  const savedLaws = laws.filter(l => l.saved);
+  const representatives = getRepresentativesForLocation(settings.location.state, laws);
+  const trendingTopic = laws.length > 0
+    ? Object.entries(laws.reduce((acc, law) => {
+        acc[law.category] = (acc[law.category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] || 'Housing'
+    : 'Housing';
+  const collectionLaws = bookmarkCollections.map(collection => ({
+    ...collection,
+    laws: laws.filter(law => collection.lawIds.includes(law.id)),
+  }));
+  const actionCount = laws.filter(law => law.status === 'proposed' && (law.saved || law.category.toLowerCase().includes(interestFilter.toLowerCase()))).length;
+
+  return (
+    <div className={`min-h-screen bg-background-color text-text-primary ${settings.largeFont ? 'text-lg' : 'text-base'}`}>
+      {/* Sidebar Navigation */}
+      <aside className="fixed left-0 top-0 z-40 h-screen w-72 border-r border-slate-200 bg-white p-8 transition-transform sm:translate-x-0">
+        <div className="mb-12 flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200">
+            <Scale size={28} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black tracking-tighter text-indigo-950">CIVICLENS</h1>
+            <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400">DEMOCRACY 2.0</p>
+          </div>
+        </div>
+
+        <nav className="space-y-3">
+          <button 
+            onClick={() => setActiveTab('feed')}
+            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'feed' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            <LayoutDashboard size={20} />
+            LEGISLATIVE FEED
+          </button>
+          <button 
+            onClick={() => setActiveTab('saved')}
+            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'saved' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            <Bookmark size={20} />
+            SAVED LAWS
+          </button>
+          <button 
+            onClick={() => setActiveTab('map')}
+            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'map' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            <Map size={20} />
+            MAP VIEW
+          </button>
+          <button 
+            onClick={() => setActiveTab('digest')}
+            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'digest' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            <Zap size={20} />
+            WEEKLY DIGEST
+          </button>
+          <button 
+            onClick={() => setActiveTab('profile')}
+            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            <UserIcon size={20} />
+            MY PROFILE
+          </button>
+          <button 
+            onClick={() => setActiveTab('roadmap')}
+            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'roadmap' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            <History size={20} />
+            ROADMAP
+          </button>
+          <button 
+            onClick={() => setActiveTab('analytics')}
+            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'analytics' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+          >
+            <BarChart3 size={20} />
+            ANALYTICS
+          </button>
+        </nav>
+
+        <div className="mt-12 border-t border-slate-100 pt-10">
+          <h3 className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+            <Filter size={12} />
+            Quick Filters
+          </h3>
+          <div className="space-y-2">
+            {[
+              { id: 'all', label: 'All Levels', icon: Globe },
+              { id: 'federal', label: 'Federal', icon: Building2 },
+              { id: 'state', label: 'State', icon: MapPin },
+              { id: 'county', label: 'County', icon: LayoutGrid },
+              { id: 'city', label: 'City', icon: Building2 },
+            ].map((level) => (
+              <button
+                key={level.id}
+                onClick={() => setLevelFilter(level.id as any)}
+                className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-xs font-bold transition-all ${levelFilter === level.id ? 'bg-slate-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <level.icon size={14} />
+                  {level.label}
+                </div>
+                {levelFilter === level.id && <div className="h-1.5 w-1.5 rounded-full bg-indigo-600" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="absolute bottom-8 left-8 right-8">
+          {user ? (
+            <div className="flex items-center gap-4 rounded-3xl bg-slate-50 p-4">
+              <div className="h-10 w-10 rounded-2xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 font-black text-sm">
+                {user.email?.[0].toUpperCase()}
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <p className="truncate text-xs font-black text-slate-900">{user.email}</p>
+                <button onClick={logOut} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">SIGN OUT</button>
+              </div>
+            </div>
+          ) : (
+            <button 
+              onClick={signIn}
+              className="flex w-full items-center justify-center gap-3 rounded-3xl bg-indigo-600 py-5 text-xs font-black text-white shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              SIGN IN WITH GOOGLE
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="pl-72">
+        <header className="sticky top-0 z-30 flex h-24 items-center justify-between border-b border-slate-200 bg-white/80 px-12 backdrop-blur-xl">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => setShowLocationSelector(!showLocationSelector)}
+              className="flex items-center gap-3 rounded-2xl bg-slate-100 px-5 py-3 transition-all hover:bg-slate-200"
+            >
+              <MapPin size={16} className="text-indigo-600" />
+              <span className="text-xs font-black text-slate-900">{settings.location.city}, {settings.location.state}</span>
+            </button>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search laws, bills, or topics..."
+                className="h-12 w-80 rounded-2xl bg-slate-100 pl-12 pr-4 text-xs font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-8">
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative rounded-2xl p-3 text-slate-400 transition-all hover:bg-slate-100 hover:text-indigo-600"
+            >
+              <Bell size={22} />
+              {notifications.some(n => !n.read) && (
+                <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-rose-500 ring-4 ring-white" />
+              )}
+            </button>
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className="rounded-2xl p-3 text-slate-400 transition-all hover:bg-slate-100 hover:text-indigo-600"
+            >
+              <Settings size={22} />
+            </button>
+          </div>
+        </header>
+
+        {/* Notifications Panel */}
+        <AnimatePresence>
+          {showNotifications && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="absolute right-12 top-24 z-50 w-96 rounded-[32px] border-2 border-slate-100 bg-white p-6 shadow-2xl shadow-indigo-100"
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <h3 className="text-sm font-black uppercase tracking-widest text-indigo-950">Notifications</h3>
+                <button 
+                  onClick={handleClearNotifications}
+                  className="text-[10px] font-bold text-slate-400 hover:text-indigo-600"
+                >
+                  CLEAR ALL
+                </button>
+              </div>
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {notifications.length > 0 ? (
+                  notifications.map(n => (
+                    <div 
+                      key={n.id} 
+                      onClick={() => handleMarkNotificationRead(n.id)}
+                      className={`cursor-pointer rounded-2xl p-4 transition-all ${n.read ? 'bg-slate-50' : 'bg-indigo-50 ring-1 ring-indigo-100'}`}
+                    >
+                      <p className="text-xs font-bold text-slate-900">{n.message}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">{n.date}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-12 text-center text-slate-400">
+                    <Bell size={32} className="mx-auto mb-4 opacity-10" />
+                    <p className="text-xs font-bold">No new notifications</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Settings Modal */}
+        <AnimatePresence>
+          {showSettings && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-indigo-950/20 backdrop-blur-sm">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="w-full max-w-lg rounded-[40px] bg-white p-10 shadow-2xl"
+              >
+                <div className="mb-8 flex items-center justify-between">
+                  <h3 className="text-2xl font-black tracking-tight text-indigo-950">App Settings</h3>
+                  <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-indigo-600">
+                    <XCircle size={24} />
+                  </button>
+                </div>
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">High Contrast</p>
+                      <p className="text-xs font-bold text-slate-400">Improve visibility for text.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ highContrast: !settings.highContrast })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.highContrast ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.highContrast ? 'ml-7' : 'ml-1'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">Large Font</p>
+                      <p className="text-xs font-bold text-slate-400">Increase text size across the app.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ largeFont: !settings.largeFont })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.largeFont ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.largeFont ? 'ml-7' : 'ml-1'}`} />
+                    </button>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowSettings(false)}
+                  className="mt-10 w-full rounded-2xl bg-indigo-600 py-5 text-sm font-black text-white shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02]"
+                >
+                  SAVE & CLOSE
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        <div className="px-12 py-10">
+          <AnimatePresence>
+            {showLocationSelector && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-8 overflow-hidden"
+              >
+                <LocationSelector 
+                  initialState={settings.location.state}
+                  initialCity={settings.location.city}
+                  initialLanguage={settings.language}
+                  onLocationChange={(state, city, language) => {
+                    handleLocationChange(state, city, language);
+                    setShowLocationSelector(false);
+                  }}
+                  onInterestChange={(interest) => setInterestFilter(interest)}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Comparison Selection Indicator */}
+          <AnimatePresence>
+            {lawsToCompare.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 50 }}
+                className="fixed bottom-10 left-1/2 z-50 flex -translate-x-1/2 items-center gap-6 rounded-[32px] bg-indigo-950 p-4 pr-8 text-white shadow-2xl shadow-indigo-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex -space-x-4">
+                    {lawsToCompare.map((law, idx) => (
+                      <div key={law.id} className={`flex h-12 w-12 items-center justify-center rounded-2xl border-4 border-indigo-950 text-xs font-black ${idx === 0 ? 'bg-indigo-600' : 'bg-amber-500'}`}>
+                        {law.title[0]}
+                      </div>
+                    ))}
+                    {lawsToCompare.length < 2 && (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border-4 border-indigo-950 bg-slate-800 text-slate-500">
+                        +
+                      </div>
+                    )}
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-black tracking-tight">Compare Legislation</p>
+                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">
+                      {lawsToCompare.length === 1 ? "Select 1 more law to compare" : "2 laws selected"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setLawsToCompare([])}
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                  >
+                    CLEAR
+                  </button>
+                  {lawsToCompare.length === 2 && (
+                    <button 
+                      onClick={() => setActiveTab('feed')} // Just to ensure we're on a tab where it shows
+                      className="rounded-xl bg-indigo-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all hover:scale-105"
+                    >
+                      COMPARE NOW
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence mode="wait">
+            {activeTab === 'feed' && (
+              <motion.div 
+                key="feed"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-10"
+              >
+                <div className="flex items-end justify-between">
+                  <div>
+                    <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Legislative Feed</h2>
+                    <p className="mt-2 font-bold text-slate-400">Real-time updates on laws affecting {settings.location.city}.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    {['Housing', 'Labor', 'Education'].map(topic => (
+                      <button 
+                        key={topic}
+                        onClick={() => setInterestFilter(topic.toLowerCase())}
+                        className={`rounded-xl border border-slate-200 px-4 py-2 text-xs font-black transition-all hover:border-indigo-600 hover:text-indigo-600 ${interestFilter === topic.toLowerCase() ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500'}`}
+                      >
+                        #{topic.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <LawFeed 
+                  laws={filteredLaws} 
+                  allLaws={laws}
+                  isLoading={isLoading} 
+                  error={error} 
+                  onSave={handleSaveLaw} 
+                  onVote={handleVote} 
+                  onComment={handleComment}
+                  onPollVote={handlePollVote}
+                  onAddImpactStory={handleAddImpactStory}
+                  onSaveToCollection={handleSaveToCollection}
+                  collections={bookmarkCollections}
+                  onCompare={handleCompare}
+                  comparingIds={lawsToCompare.map(l => l.id)}
+                  onToggleFollowTopic={handleToggleFollowTopic}
+                  followedTopics={userProfile?.followedTopics}
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'saved' && (
+              <motion.div 
+                key="saved"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <div className="mb-10">
+                  <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Saved Content</h2>
+                  <p className="mt-2 font-bold text-slate-400">Keep track of the legislation that matters most to you.</p>
+                </div>
+                {savedLaws.length > 0 ? (
+                  <LawFeed 
+                    laws={savedLaws} 
+                    allLaws={laws}
+                    isLoading={false} 
+                    error={null} 
+                    onSave={handleSaveLaw} 
+                    onVote={handleVote} 
+                    onComment={handleComment}
+                    onPollVote={handlePollVote}
+                    onAddImpactStory={handleAddImpactStory}
+                    onSaveToCollection={handleSaveToCollection}
+                    collections={bookmarkCollections}
+                    onCompare={handleCompare}
+                    comparingIds={lawsToCompare.map(l => l.id)}
+                  />
+                ) : (
+                  <div className="flex h-96 flex-col items-center justify-center gap-6 rounded-[40px] border-4 border-dashed border-slate-100 bg-white text-slate-400">
+                    <Bookmark size={64} className="opacity-10" />
+                    <div className="text-center">
+                      <p className="text-xl font-black text-slate-900">No saved laws yet</p>
+                      <p className="mt-1 font-bold">Start exploring the feed to bookmark important legislation.</p>
+                    </div>
+                    <button 
+                      onClick={() => setActiveTab('feed')}
+                      className="rounded-2xl bg-indigo-600 px-8 py-4 text-sm font-black text-white shadow-xl shadow-indigo-100 transition-all hover:scale-105"
+                    >
+                      EXPLORE FEED
+                    </button>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {activeTab === 'digest' && (
+              <motion.div 
+                key="digest"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-12"
+              >
+                <div className="mb-10">
+                  <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Weekly Digest</h2>
+                  <p className="mt-2 font-bold text-slate-400">A summary of legislative activity from the past 7 days.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+                  <div className="rounded-[40px] bg-indigo-600 p-10 text-white shadow-xl shadow-indigo-100">
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                      <Zap size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black tracking-tighter">12</h3>
+                    <p className="mt-2 font-bold text-indigo-100 uppercase tracking-widest text-[10px]">New Proposals</p>
+                  </div>
+                  <div className="rounded-[40px] bg-emerald-600 p-10 text-white shadow-xl shadow-emerald-100">
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                      <CheckCircle size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black tracking-tighter">4</h3>
+                    <p className="mt-2 font-bold text-emerald-100 uppercase tracking-widest text-[10px]">Passed Laws</p>
+                  </div>
+                  <div className="rounded-[40px] bg-amber-500 p-10 text-white shadow-xl shadow-amber-100">
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                      <AlertTriangle size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black tracking-tighter">8</h3>
+                    <p className="mt-2 font-bold text-amber-100 uppercase tracking-widest text-[10px]">Updates</p>
+                  </div>
+                </div>
+
+                <div className="space-y-8">
+                  <h3 className="text-2xl font-black tracking-tight text-indigo-950">Top Stories This Week</h3>
+                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                    {[
+                      { id: 'story-1', title: 'New Rent Control Ordinance Proposed', category: 'Housing', status: 'proposed', level: 'city', date: '2 days ago', impact: 'High impact on local renters and property owners.', simplifiedSummary: 'A new ordinance aims to cap rent increases in the city to 3% annually.' },
+                      { id: 'story-2', title: 'State Education Budget Increase Passed', category: 'Education', status: 'passed', level: 'state', date: '4 days ago', impact: 'Significant funding boost for public schools.', simplifiedSummary: 'The state legislature has approved a 15% increase in education funding for the next fiscal year.' },
+                      { id: 'story-3', title: 'Local Transit Tax Update', category: 'Taxes', status: 'updated', level: 'city', date: '1 week ago', impact: 'Small increase in sales tax to fund transit improvements.', simplifiedSummary: 'A 0.1% sales tax increase has been implemented to fund the expansion of the light rail system.' },
+                      { id: 'story-4', title: 'Immigration Support Program Expanded', category: 'Social', status: 'updated', level: 'state', date: '5 days ago', impact: 'More resources for new residents seeking legal aid.', simplifiedSummary: 'The state has doubled the budget for its legal aid program for immigrants.' }
+                    ].map((story) => (
+                      <LawCard 
+                        key={story.id} 
+                        law={story as any} 
+                        onSave={handleSaveLaw} 
+                        onVote={handleVote} 
+                        onComment={handleComment}
+                        onPollVote={handlePollVote}
+                        onAddImpactStory={handleAddImpactStory}
+                        onSaveToCollection={handleSaveToCollection}
+                        collections={bookmarkCollections}
+                        relatedLaws={laws.slice(0, 3)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[40px] border-2 border-slate-100 bg-white p-10 shadow-xl shadow-slate-200/40">
+                  <h3 className="text-2xl font-black tracking-tight text-indigo-950">Upcoming Hearings</h3>
+                  <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {laws.flatMap(law => law.hearings || []).slice(0, 4).map(hearing => (
+                      <div key={hearing.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">{hearing.type}</p>
+                        <p className="mt-2 text-sm font-black text-slate-900">{hearing.title}</p>
+                        <p className="mt-1 text-xs font-bold text-slate-500">{hearing.date} · {hearing.venue}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'profile' && (
+              <motion.div 
+                key="profile"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-12"
+              >
+                <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
+                  <div className="lg:col-span-2 space-y-12">
+                    {/* Situation Section */}
+                    <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
+                      <div className="mb-8 flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                          <MessageSquare size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Ask About Your Situation</h3>
+                          <p className="font-bold text-slate-400 text-sm">Get AI-powered legal context tailored to you.</p>
+                        </div>
+                      </div>
+                      <textarea 
+                        className="w-full rounded-3xl border-2 border-slate-100 bg-slate-50 p-6 text-sm font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
+                        rows={4}
+                        placeholder="e.g., I'm an international student working part-time in San Francisco. How do these new labor laws affect me?"
+                        value={userProfile?.situation || ''}
+                        onChange={(e) => setUserProfile(prev => prev ? { ...prev, situation: e.target.value } : null)}
+                      />
+                      <button 
+                        onClick={() => handleSaveSituation(userProfile?.situation || '')}
+                        className="mt-6 rounded-2xl bg-indigo-600 px-10 py-5 text-sm font-black text-white shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02]"
+                      >
+                        UPDATE MY CONTEXT
+                      </button>
+                    </section>
+
+                    {/* Followed Topics */}
+                    <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
+                      <div className="mb-8 flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                          <TrendingUp size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Followed Topics</h3>
+                          <p className="font-bold text-slate-400 text-sm">Stay updated on specific legislative areas.</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-4">
+                        {['Housing', 'Immigration', 'Labor', 'Education', 'Health', 'Environment', 'Taxes', 'Transport'].map(topic => (
+                          <button 
+                            key={topic}
+                            onClick={() => handleToggleFollowTopic(topic)}
+                            className={`flex items-center gap-3 rounded-2xl border-2 px-6 py-4 text-sm font-black transition-all ${userProfile?.followedTopics.includes(topic) ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border-slate-100 bg-white text-slate-500 hover:border-indigo-600 hover:text-indigo-600'}`}
+                          >
+                            {topic}
+                            {userProfile?.followedTopics.includes(topic) && <ChevronRight size={14} />}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+
+                  <div className="space-y-12">
+                    {/* Representatives */}
+                    <section className="space-y-8">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+                          <Users size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Your Representatives</h3>
+                          <p className="font-bold text-slate-400 text-sm">Direct connection to your elected officials.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-6">
+                        {representatives.map((rep) => (
+                          <RepresentativeCard key={rep.id} representative={rep} />
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
+                      <h3 className="text-2xl font-black tracking-tight text-indigo-950">Collective Bookmarks</h3>
+                      <div className="mt-6 space-y-4">
+                        {collectionLaws.map(collection => (
+                          <div key={collection.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-black text-slate-900">{collection.name}</p>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{collection.laws.length} laws</span>
+                            </div>
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {collection.laws.length > 0 ? collection.laws.map(law => (
+                                <span key={law.id} className="rounded-full bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600">
+                                  {law.title}
+                                </span>
+                              )) : (
+                                <p className="text-xs font-bold text-slate-400">Save laws to build a shared watchlist.</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {activeTab === 'map' && (
+              <motion.div 
+                key="map"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <MapView 
+                  laws={laws} 
+                  onSelectLaw={(law) => {
+                    setActiveTab('feed');
+                  }} 
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'analytics' && (
+              <motion.div 
+                key="analytics"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <AnalyticsView laws={laws} collections={bookmarkCollections} />
+              </motion.div>
+            )}
+
+            {activeTab === 'roadmap' && (
+              <motion.div 
+                key="roadmap"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <RoadmapView />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Info Section - Bento Grid */}
+        <div className="mt-24 grid grid-cols-1 gap-8 md:grid-cols-3">
+          <div className="rounded-[40px] bg-indigo-600 p-10 text-white shadow-2xl shadow-indigo-200 md:col-span-2">
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+              <ShieldCheck size={28} />
+            </div>
+            <h3 className="text-3xl font-black tracking-tighter">Your Rights, Simplified.</h3>
+            <p className="mt-4 font-bold text-indigo-100">CivicLens uses advanced AI to break down complex legal jargon into actionable insights for your specific situation.</p>
+            <div className="mt-8 flex gap-4">
+              <div className="rounded-2xl bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest">Privacy First</div>
+              <div className="rounded-2xl bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest">AI Powered</div>
+            </div>
+          </div>
+
+          <div className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <TrendingUp size={28} />
+            </div>
+            <h4 className="text-xl font-black tracking-tight text-indigo-950">Trending</h4>
+            <p className="mt-2 text-sm font-bold text-slate-400">{trendingTopic} is the #1 topic in your area this week.</p>
+          </div>
+
+          <div className="rounded-[40px] bg-slate-900 p-10 text-white shadow-xl">
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+              <Zap size={28} className="text-amber-400" />
+            </div>
+            <h4 className="text-xl font-black tracking-tight">Quick Action</h4>
+            <p className="mt-2 text-sm font-bold text-slate-400">{actionCount} active bills matching your interests or saved laws need your feedback.</p>
+            <button className="mt-6 text-xs font-black text-amber-400 hover:underline">VIEW ACTIONS →</button>
+          </div>
+        </div>
+
+        <footer className="mt-32 border-t border-slate-100 py-16 text-center">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400">© 2026 CivicLens. Empowering communities through information.</p>
+          <p className="mt-4 mx-auto max-w-2xl text-[10px] font-bold text-slate-300">CivicLens provides AI-generated summaries for informational purposes. Always consult with a legal professional for specific legal advice.</p>
+        </footer>
+      </main>
+
+      <AILawyer laws={laws} userSituation={userProfile?.situation} />
+
+      {lawsToCompare.length === 2 && (
+        <CompareLaws 
+          law1={lawsToCompare[0]} 
+          law2={lawsToCompare[1]} 
+          onClose={() => setLawsToCompare([])} 
+        />
+      )}
+    </div>
+  );
+}
