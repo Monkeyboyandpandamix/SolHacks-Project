@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Search, Navigation, Loader2, ChevronDown } from 'lucide-react';
 
-const STATE_FLAGS: Record<string, string> = {
+export const STATE_FLAGS: Record<string, string> = {
   "Alabama": "us-al", "Alaska": "us-ak", "Arizona": "us-az", "Arkansas": "us-ar", "California": "us-ca",
   "Colorado": "us-co", "Connecticut": "us-ct", "Delaware": "us-de", "Florida": "us-fl", "Georgia": "us-ga",
   "Hawaii": "us-hi", "Idaho": "us-id", "Illinois": "us-il", "Indiana": "us-in", "Iowa": "us-ia",
@@ -12,7 +12,21 @@ const STATE_FLAGS: Record<string, string> = {
   "Oklahoma": "us-ok", "Oregon": "us-or", "Pennsylvania": "us-pa", "Rhode Island": "us-ri", "South Carolina": "us-sc",
   "South Dakota": "us-sd", "Tennessee": "us-tn", "Texas": "us-tx", "Utah": "us-ut",
   "Vermont": "us-vt", "Virginia": "us-va", "Washington": "us-wa", "West Virginia": "us-wv",
-  "Wisconsin": "us-wi", "Wyoming": "us-wy", "Puerto Rico": "pr", "Washington D.C.": "us"
+  "Wisconsin": "us-wi", "Wyoming": "us-wy", "Puerto Rico": "pr", "Washington D.C.": "us-dc"
+};
+
+export const STATE_ABBR: Record<string, string> = {
+  "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+  "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA",
+  "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN", "Iowa": "IA",
+  "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
+  "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS", "Missouri": "MO",
+  "Montana": "MT", "Nebraska": "NE", "Nevada": "NV", "New Hampshire": "NH", "New Jersey": "NJ",
+  "New Mexico": "NM", "New York": "NY", "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH",
+  "Oklahoma": "OK", "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC",
+  "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT",
+  "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV",
+  "Wisconsin": "WI", "Wyoming": "WY", "Puerto Rico": "PR", "Washington D.C.": "DC"
 };
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
@@ -150,7 +164,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
                 {STATE_FLAGS[state] && (
                   <img src={`https://flagcdn.com/w20/${STATE_FLAGS[state]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[state]}.png 2x`} width="20" alt={`${state} flag`} className="rounded-sm shadow-sm" />
                 )}
-                <span>{state}</span>
+                <span>{state} ({STATE_ABBR[state]})</span>
               </div>
               <ChevronDown size={14} className="text-muted" />
             </button>
@@ -173,7 +187,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
                       ) : (
                         <div className="w-[20px]" />
                       )}
-                      <span>{s}</span>
+                      <span>{s} ({STATE_ABBR[s]})</span>
                     </button>
                   ))}
                 </motion.div>
