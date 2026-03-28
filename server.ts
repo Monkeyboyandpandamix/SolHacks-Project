@@ -908,7 +908,7 @@ Return only the completed letter.`);
     if (!ai) return res.json({ reply: "" });
     try {
       const conversation = history.map((item: any) => `${item.role === "user" ? "User" : "Assistant"}: ${String(item.text || "")}`).join("\n");
-      const reply = await generateAiText(`You are an AI Civic Assistant.
+      const reply = await generateAiText(`You are the CulturAct assistant.
 ${userSituation ? `The user's situation is: "${userSituation}".` : ""}
 Use these laws as context: ${JSON.stringify(context.map((l: any) => ({ id: l.id, title: l.title, summary: l.simplifiedSummary, impact: l.impact, status: l.status })))}
 Conversation so far:

@@ -1,6 +1,6 @@
 {
-  "name": "CivicLens",
-  "description": "An AI-powered civic engagement platform that simplifies laws and helps communities stay informed about legislation.",
+  "name": "CulturAct",
+  "description": "An AI-powered civic platform that helps people and communities discover, understand, and act on legislation affecting daily life, rights, culture, heritage, and identity.",
   "requestFramePermissions": [
     "geolocation"
   ]

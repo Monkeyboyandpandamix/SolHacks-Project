@@ -12,7 +12,7 @@ interface AILawyerProps {
 const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', text: "Hello! I'm your AI Civic Assistant. I can help you understand the laws we've found for your area. What would you like to know?" },
+    { role: 'model', text: "Hello! I'm your CulturAct assistant. I can help you understand the laws we've found for your area and explain how they affect daily life, rights, and community. What would you like to know?" },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -68,7 +68,7 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
                   <Bot size={18} />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold">AI Civic Assistant</h3>
+                  <h3 className="text-sm font-bold">CulturAct Assistant</h3>
                   <span className="text-[10px] uppercase tracking-widest opacity-80">Powered by Gemini</span>
                 </div>
               </div>

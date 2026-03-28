@@ -110,12 +110,20 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
 
   const interests = [
     { id: 'all', label: 'All Interests' },
-    { id: 'immigration', label: 'Immigration' },
     { id: 'housing', label: 'Housing & Tenant' },
     { id: 'labor', label: 'Employment & Labor' },
     { id: 'education', label: 'Education' },
     { id: 'health', label: 'Health & Benefits' },
     { id: 'environment', label: 'Environment' },
+    { id: 'immigration', label: 'Immigration' },
+    { id: 'language access', label: 'Language Access' },
+    { id: 'indigenous rights', label: 'Indigenous Rights' },
+    { id: 'arts & culture funding', label: 'Arts & Culture Funding' },
+    { id: 'racial equity', label: 'Racial Equity' },
+    { id: 'religious freedom', label: 'Religious Freedom' },
+    { id: 'lgbtq+ rights', label: 'LGBTQ+ Rights' },
+    { id: 'voting access', label: 'Voting Access' },
+    { id: 'international students', label: 'International Students' },
   ];
 
   const states = [

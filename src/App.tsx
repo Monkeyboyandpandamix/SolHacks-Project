@@ -49,6 +49,56 @@ import { fetchLaws, mergeCanonicalLaws } from './services/geminiService';
 import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
 import { collection, deleteDoc, doc, getDoc, setDoc, getDocs, Timestamp } from 'firebase/firestore';
 
+const CORE_FILTER_TOPICS = [
+  'Housing',
+  'Labor',
+  'Education',
+  'Health',
+  'Environment',
+];
+
+const CULTURAL_FILTER_TOPICS = [
+  'Immigration',
+  'Language Access',
+  'Indigenous Rights',
+  'Arts & Culture Funding',
+  'Racial Equity',
+  'Religious Freedom',
+];
+
+const HYBRID_FILTER_TOPICS = [...CORE_FILTER_TOPICS, ...CULTURAL_FILTER_TOPICS];
+
+const CORE_PROFILE_TOPICS = [
+  'Housing',
+  'Labor',
+  'Education',
+  'Health',
+  'Environment',
+  'Taxes',
+  'Transport',
+];
+
+const CULTURAL_PROFILE_TOPICS = [
+  'Immigration',
+  'Language Access',
+  'Indigenous Rights',
+  'Arts & Culture Funding',
+  'Racial Equity',
+  'Religious Freedom',
+  'LGBTQ+ Rights',
+  'Refugee & Asylum',
+  'Voting Access',
+  'Heritage Preservation',
+  'Education Equity',
+  'Housing Discrimination',
+  'International Students',
+  'Hate Crimes',
+];
+
+const HYBRID_PROFILE_TOPICS = [...CORE_PROFILE_TOPICS, ...CULTURAL_PROFILE_TOPICS];
+const SETTINGS_STORAGE_KEY = 'culturact_settings';
+const LEGACY_SETTINGS_STORAGE_KEY = 'civiclens_settings';
+
 function sanitizeForFirestore<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => sanitizeForFirestore(item)) as T;
@@ -76,7 +126,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
-    const saved = localStorage.getItem('civiclens_settings');
+    const saved = localStorage.getItem(SETTINGS_STORAGE_KEY) || localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
     return saved ? JSON.parse(saved) : {
       highContrast: false,
       fontSize: 'medium',
@@ -298,7 +348,8 @@ export default function App() {
   }, [loadLaws]);
 
   useEffect(() => {
-    localStorage.setItem('civiclens_settings', JSON.stringify(settings));
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.removeItem(LEGACY_SETTINGS_STORAGE_KEY);
     
     // Apply accessibility classes to body
     document.body.classList.toggle('high-contrast', settings.highContrast);
@@ -442,6 +493,15 @@ export default function App() {
     setNotifications([]);
   };
 
+  const handleToggleInterestFilter = (topic: string) => {
+    const normalized = topic.toLowerCase();
+    setInterestFilter((current) => current === normalized ? 'all' : normalized);
+  };
+
+  const handleToggleLevelFilter = (level: 'all' | 'federal' | 'state' | 'county' | 'city') => {
+    setLevelFilter((current) => current === level ? 'all' : level);
+  };
+
   const filteredLaws = laws.filter(law => {
     const matchesLevel = levelFilter === 'all' || law.level === levelFilter;
     const matchesInterest = interestFilter === 'all' || law.category.toLowerCase().includes(interestFilter.toLowerCase());
@@ -495,8 +555,8 @@ export default function App() {
             <Scale size={28} />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tighter text-indigo-950">CIVICLENS</h1>
-            <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400">DEMOCRACY 2.0</p>
+            <h1 className="text-2xl font-black tracking-tighter text-indigo-950">CULTURACT</h1>
+            <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400">COMMUNITY POWERED CIVICS</p>
           </div>
         </div>
 
@@ -540,7 +600,7 @@ export default function App() {
             ].map((level) => (
               <button
                 key={level.id}
-                onClick={() => setLevelFilter(level.id as any)}
+                onClick={() => handleToggleLevelFilter(level.id as any)}
                 className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-xs font-bold transition-all ${levelFilter === level.id ? 'bg-slate-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
               >
                 <div className="flex items-center gap-3">
@@ -848,7 +908,7 @@ export default function App() {
                       {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}!
                     </h2>
                     <p className="mt-2 text-sm font-bold flex items-center gap-2 text-slate-400">
-                      Here's your real-time feed for
+                      Here's your community-impact feed for
                       {STATE_FLAGS[settings.location.state] && (
                         <img src={`https://flagcdn.com/w20/${STATE_FLAGS[settings.location.state]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[settings.location.state]}.png 2x`} width="20" alt={`${settings.location.state} flag`} className="rounded-sm shadow-sm" />
                       )}
@@ -863,10 +923,10 @@ export default function App() {
                         PRIMARY: #{primaryInterest.toUpperCase()}
                       </div>
                     )}
-                    {['Housing', 'Labor', 'Education', 'Immigration', 'Health'].map(topic => (
+                    {HYBRID_FILTER_TOPICS.map(topic => (
                       <button 
                         key={topic}
-                        onClick={() => setInterestFilter(topic.toLowerCase())}
+                        onClick={() => handleToggleInterestFilter(topic)}
                         className={`rounded-xl border border-slate-200 px-4 py-2 text-xs font-black transition-all hover:border-indigo-600 hover:text-indigo-600 ${interestFilter === topic.toLowerCase() ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500'}`}
                       >
                         #{topic.toUpperCase()}
@@ -952,7 +1012,7 @@ export default function App() {
               >
                 <div className="mb-10">
                   <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Weekly Digest</h2>
-                  <p className="mt-2 font-bold text-slate-400">A summary of legislative activity from the past 7 days.</p>
+                  <p className="mt-2 font-bold text-slate-400">A summary of recent legislative activity affecting daily life, rights, identity, and community.</p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
@@ -983,10 +1043,10 @@ export default function App() {
                   <h3 className="text-2xl font-black tracking-tight text-indigo-950">Top Stories This Week</h3>
                   <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                     {[
-                      { id: 'story-1', title: 'New Rent Control Ordinance Proposed', category: 'Housing', status: 'proposed', level: 'city', date: '2 days ago', impact: 'High impact on local renters and property owners.', simplifiedSummary: 'A new ordinance aims to cap rent increases in the city to 3% annually.' },
-                      { id: 'story-2', title: 'State Education Budget Increase Passed', category: 'Education', status: 'passed', level: 'state', date: '4 days ago', impact: 'Significant funding boost for public schools.', simplifiedSummary: 'The state legislature has approved a 15% increase in education funding for the next fiscal year.' },
-                      { id: 'story-3', title: 'Local Transit Tax Update', category: 'Taxes', status: 'updated', level: 'city', date: '1 week ago', impact: 'Small increase in sales tax to fund transit improvements.', simplifiedSummary: 'A 0.1% sales tax increase has been implemented to fund the expansion of the light rail system.' },
-                      { id: 'story-4', title: 'Immigration Support Program Expanded', category: 'Social', status: 'updated', level: 'state', date: '5 days ago', impact: 'More resources for new residents seeking legal aid.', simplifiedSummary: 'The state has doubled the budget for its legal aid program for immigrants.' }
+                      { id: 'story-1', title: 'Interpreter Access Ordinance Proposed', category: 'Language Access', status: 'proposed', level: 'city', date: '2 days ago', impact: 'Could expand access to city services for residents who do not use English as a primary language.', simplifiedSummary: 'A city ordinance would require key public-facing agencies to provide translated forms and interpreter support.' },
+                      { id: 'story-2', title: 'State Education Budget Increase Passed', category: 'Education', status: 'passed', level: 'state', date: '4 days ago', impact: 'Significant funding boost for public schools and a stronger equity mandate for underserved districts.', simplifiedSummary: 'The state legislature has approved a 15% increase in education funding with an emphasis on schools serving historically under-resourced communities.' },
+                      { id: 'story-3', title: 'Community Arts Grant Expansion Approved', category: 'Arts & Culture Funding', status: 'updated', level: 'city', date: '1 week ago', impact: 'Adds support for local artists, neighborhood festivals, and cultural institutions.', simplifiedSummary: 'A new municipal package expands grants for arts organizations, community performances, and cultural preservation projects.' },
+                      { id: 'story-4', title: 'Immigration Legal Aid Program Expanded', category: 'Immigration', status: 'updated', level: 'state', date: '5 days ago', impact: 'More resources for new residents and families seeking legal aid and language support.', simplifiedSummary: 'The state has doubled the budget for its legal aid program for immigrants and mixed-status households.' }
                     ].map((story) => (
                       <LawCard 
                         key={story.id} 
@@ -1019,14 +1079,14 @@ export default function App() {
                           <MessageSquare size={24} />
                         </div>
                         <div>
-                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Ask About Your Situation</h3>
-                          <p className="font-bold text-slate-400 text-sm">Get AI-powered legal context tailored to you.</p>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">How This Affects Me Or My Community</h3>
+                          <p className="font-bold text-slate-400 text-sm">Save personal or cultural context so the AI can explain bills in terms that fit your real life.</p>
                         </div>
                       </div>
                       <textarea 
                         className="w-full rounded-3xl border-2 border-slate-100 bg-slate-50 p-6 text-sm font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
                         rows={4}
-                        placeholder="e.g., I'm an international student working part-time in San Francisco. How do these new labor laws affect me?"
+                        placeholder="e.g., I'm an international student working part-time in San Francisco and my family relies on translated services. How do these laws affect me and my community?"
                         value={userProfile?.situation || ''}
                         onChange={(e) => setUserProfile(prev => prev ? { ...prev, situation: e.target.value } : null)}
                       />
@@ -1045,12 +1105,12 @@ export default function App() {
                           <TrendingUp size={24} />
                         </div>
                         <div>
-                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Followed Topics</h3>
-                          <p className="font-bold text-slate-400 text-sm">Stay updated on specific legislative areas.</p>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Followed Topics And Cultural Impact Tags</h3>
+                          <p className="font-bold text-slate-400 text-sm">Track standard civic issues and identity-specific community impacts in one place.</p>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-4">
-                        {['Housing', 'Immigration', 'Labor', 'Education', 'Health', 'Environment', 'Taxes', 'Transport'].map(topic => (
+                        {HYBRID_PROFILE_TOPICS.map(topic => (
                           <button 
                             key={topic}
                             onClick={() => handleToggleFollowTopic(topic)}
@@ -1170,8 +1230,8 @@ export default function App() {
             <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
               <ShieldCheck size={28} />
             </div>
-            <h3 className="text-3xl font-black tracking-tighter">Your Rights, Simplified.</h3>
-            <p className="mt-4 font-bold text-indigo-100">CivicLens uses advanced AI to break down complex legal jargon into actionable insights for your specific situation.</p>
+            <h3 className="text-3xl font-black tracking-tighter">Know The Laws That Shape Daily Life And Culture.</h3>
+            <p className="mt-4 font-bold text-indigo-100">CulturAct uses AI to explain legislation affecting housing, work, education, health, language, heritage, identity, land, and belonging in plain language.</p>
             <div className="mt-8 flex gap-4">
               <div className="rounded-2xl bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest">Privacy First</div>
               <div className="rounded-2xl bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest">AI Powered</div>
@@ -1183,7 +1243,7 @@ export default function App() {
               <TrendingUp size={28} />
             </div>
             <h4 className="text-xl font-black tracking-tight text-indigo-950">Trending</h4>
-            <p className="mt-2 text-sm font-bold text-slate-400">Housing reform is the #1 topic in your area this week.</p>
+            <p className="mt-2 text-sm font-bold text-slate-400">Housing, immigration, and language access are the top topics in your area this week.</p>
           </div>
 
           <div className="rounded-[40px] bg-slate-900 p-10 text-white shadow-xl">
@@ -1191,14 +1251,14 @@ export default function App() {
               <Zap size={28} className="text-amber-400" />
             </div>
             <h4 className="text-xl font-black tracking-tight">Quick Action</h4>
-            <p className="mt-2 text-sm font-bold text-slate-400">3 new bills matching your interests need your feedback.</p>
+            <p className="mt-2 text-sm font-bold text-slate-400">3 new bills matching your civic and cultural interests need your feedback.</p>
             <button className="mt-6 text-xs font-black text-amber-400 hover:underline">VIEW ACTIONS →</button>
           </div>
         </div>
 
         <footer className="mt-32 border-t border-slate-100 py-16 text-center">
-          <p className="text-xs font-black uppercase tracking-widest text-slate-400">© 2026 CivicLens. Empowering communities through information.</p>
-          <p className="mt-4 mx-auto max-w-2xl text-[10px] font-bold text-slate-300">CivicLens provides AI-generated summaries for informational purposes. Always consult with a legal professional for specific legal advice.</p>
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400">© 2026 CulturAct. Know the laws that shape your community.</p>
+          <p className="mt-4 mx-auto max-w-2xl text-[10px] font-bold text-slate-300">CulturAct provides AI-generated summaries for informational purposes. Always consult with a legal professional for specific legal advice.</p>
         </footer>
       </main>
 

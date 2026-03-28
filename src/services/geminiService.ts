@@ -42,15 +42,68 @@ const glossaryByCategory: Record<string, { term: string; definition: string }[]>
     { term: "revenue", definition: "Money the government collects." },
     { term: "appropriation", definition: "Government money assigned to a specific use." },
   ],
+  immigration: [
+    { term: "visa", definition: "Official permission allowing someone to enter, stay, study, or work under certain conditions." },
+    { term: "removal proceedings", definition: "A legal process that decides whether someone can remain in the country." },
+    { term: "legal aid", definition: "Free or low-cost legal help for people who need assistance." },
+  ],
+  "language access": [
+    { term: "interpreter services", definition: "Language support that helps people communicate in hearings, hospitals, schools, or public offices." },
+    { term: "translated materials", definition: "Forms, notices, and guides provided in languages other than English." },
+    { term: "limited English proficiency", definition: "A term used when someone cannot easily read, speak, write, or understand English in official settings." },
+  ],
+  "indigenous rights": [
+    { term: "tribal consultation", definition: "A process requiring governments to engage tribes before taking action that may affect them." },
+    { term: "sacred site", definition: "A place with spiritual, historical, or ceremonial importance to an Indigenous community." },
+    { term: "sovereignty", definition: "The authority of a tribal nation to govern itself and make decisions for its people." },
+  ],
+  "arts & culture funding": [
+    { term: "grant appropriation", definition: "Public funding formally allocated to arts organizations, artists, or cultural institutions." },
+    { term: "cultural institution", definition: "An organization such as a museum, theater, archive, or heritage center that preserves or shares culture." },
+    { term: "public humanities", definition: "Programs that support history, language, storytelling, and cultural memory in public life." },
+  ],
+  "racial equity": [
+    { term: "disparate impact", definition: "When a rule harms one group more than others even if it appears neutral on paper." },
+    { term: "equity assessment", definition: "A review of whether a proposed policy will improve or worsen unequal outcomes." },
+    { term: "protected class", definition: "A group protected by anti-discrimination laws." },
+  ],
+  "religious freedom": [
+    { term: "religious accommodation", definition: "A change or exception that allows someone to practice their faith without unfair penalty." },
+    { term: "free exercise", definition: "The constitutional protection for practicing religion." },
+    { term: "establishment clause", definition: "A constitutional rule limiting government promotion or endorsement of religion." },
+  ],
+  "lgbtq+ rights": [
+    { term: "gender identity", definition: "A person's internal sense of their own gender." },
+    { term: "non-discrimination protections", definition: "Rules preventing unfair treatment in jobs, housing, schools, or services." },
+    { term: "affirming care", definition: "Medical or supportive care that respects and responds to a person's gender identity." },
+  ],
+  "voting access": [
+    { term: "early voting", definition: "Casting a ballot before the official election day." },
+    { term: "voter eligibility", definition: "The rules determining who may legally register and vote." },
+    { term: "ballot access", definition: "How easily eligible voters can register, receive, and submit their vote." },
+  ],
+  "international students": [
+    { term: "F-1 status", definition: "A common visa category for international students studying in the United States." },
+    { term: "CPT/OPT", definition: "Programs that allow eligible international students to work temporarily under immigration rules." },
+    { term: "SEVIS", definition: "The federal system schools use to track and report information about international students." },
+  ],
 };
 
 function inferCategory(title: string, summary: string) {
   const haystack = `${title} ${summary}`.toLowerCase();
+  if (/(immigration|migrant|visa|citizen|daca|asylum|refugee|deport)/.test(haystack)) return "Immigration";
+  if (/(translation|translated|interpreter|multilingual|language access|english learner|limited english)/.test(haystack)) return "Language Access";
+  if (/(tribal|tribe|indigenous|native nation|sacred site|reservation|heritage land)/.test(haystack)) return "Indigenous Rights";
+  if (/(museum|arts?|artist|cultural institution|heritage center|humanities|historic preservation)/.test(haystack)) return "Arts & Culture Funding";
+  if (/(racial equity|civil rights|discrimination|bias|hate crime|equity assessment|minority)/.test(haystack)) return "Racial Equity";
+  if (/(religious freedom|faith|worship|church|mosque|synagogue|temple|religious accommodation)/.test(haystack)) return "Religious Freedom";
+  if (/(lgbtq|transgender|gender identity|sexual orientation|same-sex|queer)/.test(haystack)) return "LGBTQ+ Rights";
+  if (/(vote|voter|ballot|polling place|election access|redistricting)/.test(haystack)) return "Voting Access";
+  if (/(international student|student visa|f-1|sevis|optional practical training|curricular practical training)/.test(haystack)) return "International Students";
   if (/(rent|tenant|housing|zoning|homeless)/.test(haystack)) return "Housing";
   if (/(wage|worker|employment|labor|union|leave)/.test(haystack)) return "Labor";
   if (/(school|student|teacher|college|education)/.test(haystack)) return "Education";
   if (/(health|medical|insurance|medicaid|mental health)/.test(haystack)) return "Health";
-  if (/(immigration|migrant|visa|citizen)/.test(haystack)) return "Immigration";
   if (/(climate|water|emission|environment|energy)/.test(haystack)) return "Environment";
   if (/(tax|budget|revenue|appropriation)/.test(haystack)) return "Taxes";
   return "Civic";

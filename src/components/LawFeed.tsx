@@ -136,7 +136,7 @@ const LawFeed: React.FC<LawFeedProps> = ({
   return (
     <div className="w-full">
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-950">Legislative feed</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-950">Community legislative feed</h2>
         <span className="text-sm text-slate-500">{totalCount ?? laws.length} laws found</span>
       </div>
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-4">

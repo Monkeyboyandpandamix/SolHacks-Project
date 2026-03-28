@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Building2, Landmark, MapPin } from 'lucide-react';
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
 import { Law } from '../types';
 
 interface MapViewProps {
@@ -10,60 +11,70 @@ interface MapViewProps {
 
 type ScopeFilter = 'all' | 'federal' | 'state' | 'local';
 
-const STATE_POINTS: Record<string, { x: number; y: number; short: string }> = {
-  Alabama: { x: 628, y: 324, short: 'AL' },
-  Alaska: { x: 126, y: 405, short: 'AK' },
-  Arizona: { x: 165, y: 280, short: 'AZ' },
-  Arkansas: { x: 493, y: 296, short: 'AR' },
-  California: { x: 82, y: 238, short: 'CA' },
-  Colorado: { x: 265, y: 214, short: 'CO' },
-  Connecticut: { x: 771, y: 160, short: 'CT' },
-  Delaware: { x: 748, y: 199, short: 'DE' },
-  Florida: { x: 702, y: 377, short: 'FL' },
-  Georgia: { x: 646, y: 317, short: 'GA' },
-  Hawaii: { x: 242, y: 419, short: 'HI' },
-  Idaho: { x: 157, y: 141, short: 'ID' },
-  Illinois: { x: 528, y: 197, short: 'IL' },
-  Indiana: { x: 559, y: 197, short: 'IN' },
-  Iowa: { x: 446, y: 172, short: 'IA' },
-  Kansas: { x: 378, y: 231, short: 'KS' },
-  Kentucky: { x: 578, y: 236, short: 'KY' },
-  Louisiana: { x: 496, y: 347, short: 'LA' },
-  Maine: { x: 797, y: 107, short: 'ME' },
-  Maryland: { x: 731, y: 206, short: 'MD' },
-  Massachusetts: { x: 780, y: 145, short: 'MA' },
-  Michigan: { x: 563, y: 144, short: 'MI' },
-  Minnesota: { x: 439, y: 112, short: 'MN' },
-  Mississippi: { x: 563, y: 322, short: 'MS' },
-  Missouri: { x: 456, y: 236, short: 'MO' },
-  Montana: { x: 254, y: 117, short: 'MT' },
-  Nebraska: { x: 375, y: 195, short: 'NE' },
-  Nevada: { x: 133, y: 193, short: 'NV' },
-  'New Hampshire': { x: 781, y: 125, short: 'NH' },
-  'New Jersey': { x: 753, y: 187, short: 'NJ' },
-  'New Mexico': { x: 245, y: 283, short: 'NM' },
-  'New York': { x: 734, y: 152, short: 'NY' },
-  'North Carolina': { x: 678, y: 258, short: 'NC' },
-  'North Dakota': { x: 381, y: 112, short: 'ND' },
-  Ohio: { x: 606, y: 192, short: 'OH' },
-  Oklahoma: { x: 406, y: 283, short: 'OK' },
-  Oregon: { x: 95, y: 132, short: 'OR' },
-  Pennsylvania: { x: 702, y: 176, short: 'PA' },
-  'Rhode Island': { x: 789, y: 154, short: 'RI' },
-  'South Carolina': { x: 666, y: 286, short: 'SC' },
-  'South Dakota': { x: 380, y: 149, short: 'SD' },
-  Tennessee: { x: 588, y: 267, short: 'TN' },
-  Texas: { x: 384, y: 351, short: 'TX' },
-  Utah: { x: 188, y: 214, short: 'UT' },
-  Vermont: { x: 759, y: 128, short: 'VT' },
-  Virginia: { x: 699, y: 229, short: 'VA' },
-  Washington: { x: 102, y: 96, short: 'WA' },
-  'West Virginia': { x: 649, y: 213, short: 'WV' },
-  Wisconsin: { x: 493, y: 141, short: 'WI' },
-  Wyoming: { x: 240, y: 163, short: 'WY' },
+type StateCenter = {
+  lat: number;
+  lng: number;
+  short: string;
 };
 
-const MAP_SHAPE = 'M64 88 C124 46 193 41 245 48 C297 56 361 45 418 47 C484 49 543 64 598 81 C650 97 706 120 748 154 C790 188 813 225 806 260 C797 301 744 330 691 351 C630 375 566 381 512 382 C448 383 403 367 345 365 C282 362 217 373 163 359 C110 345 68 311 50 262 C30 207 19 120 64 88 Z';
+const US_CENTER: [number, number] = [39.8283, -98.5795];
+const US_ZOOM = 4;
+const SELECTED_ZOOM = 6;
+
+const STATE_CENTERS: Record<string, StateCenter> = {
+  Alabama: { lat: 32.8067, lng: -86.7911, short: 'AL' },
+  Alaska: { lat: 61.3707, lng: -152.4044, short: 'AK' },
+  Arizona: { lat: 33.7298, lng: -111.4312, short: 'AZ' },
+  Arkansas: { lat: 34.9697, lng: -92.3731, short: 'AR' },
+  California: { lat: 36.1162, lng: -119.6816, short: 'CA' },
+  Colorado: { lat: 39.0598, lng: -105.3111, short: 'CO' },
+  Connecticut: { lat: 41.5978, lng: -72.7554, short: 'CT' },
+  Delaware: { lat: 39.3185, lng: -75.5071, short: 'DE' },
+  Florida: { lat: 27.7663, lng: -81.6868, short: 'FL' },
+  Georgia: { lat: 33.0406, lng: -83.6431, short: 'GA' },
+  Hawaii: { lat: 21.0943, lng: -157.4983, short: 'HI' },
+  Idaho: { lat: 44.2405, lng: -114.4788, short: 'ID' },
+  Illinois: { lat: 40.3495, lng: -88.9861, short: 'IL' },
+  Indiana: { lat: 39.8494, lng: -86.2583, short: 'IN' },
+  Iowa: { lat: 42.0115, lng: -93.2105, short: 'IA' },
+  Kansas: { lat: 38.5266, lng: -96.7265, short: 'KS' },
+  Kentucky: { lat: 37.6681, lng: -84.6701, short: 'KY' },
+  Louisiana: { lat: 31.1695, lng: -91.8678, short: 'LA' },
+  Maine: { lat: 44.6939, lng: -69.3819, short: 'ME' },
+  Maryland: { lat: 39.0639, lng: -76.8021, short: 'MD' },
+  Massachusetts: { lat: 42.2302, lng: -71.5301, short: 'MA' },
+  Michigan: { lat: 43.3266, lng: -84.5361, short: 'MI' },
+  Minnesota: { lat: 45.6945, lng: -93.9002, short: 'MN' },
+  Mississippi: { lat: 32.7416, lng: -89.6787, short: 'MS' },
+  Missouri: { lat: 38.4561, lng: -92.2884, short: 'MO' },
+  Montana: { lat: 46.9219, lng: -110.4544, short: 'MT' },
+  Nebraska: { lat: 41.1254, lng: -98.2681, short: 'NE' },
+  Nevada: { lat: 38.3135, lng: -117.0554, short: 'NV' },
+  'New Hampshire': { lat: 43.4525, lng: -71.5639, short: 'NH' },
+  'New Jersey': { lat: 40.2989, lng: -74.521, short: 'NJ' },
+  'New Mexico': { lat: 34.8405, lng: -106.2485, short: 'NM' },
+  'New York': { lat: 42.1657, lng: -74.9481, short: 'NY' },
+  'North Carolina': { lat: 35.6301, lng: -79.8064, short: 'NC' },
+  'North Dakota': { lat: 47.5289, lng: -99.784, short: 'ND' },
+  Ohio: { lat: 40.3888, lng: -82.7649, short: 'OH' },
+  Oklahoma: { lat: 35.5653, lng: -96.9289, short: 'OK' },
+  Oregon: { lat: 44.572, lng: -122.0709, short: 'OR' },
+  Pennsylvania: { lat: 40.5908, lng: -77.2098, short: 'PA' },
+  'Rhode Island': { lat: 41.6809, lng: -71.5118, short: 'RI' },
+  'South Carolina': { lat: 33.8569, lng: -80.945, short: 'SC' },
+  'South Dakota': { lat: 44.2998, lng: -99.4388, short: 'SD' },
+  Tennessee: { lat: 35.7478, lng: -86.6923, short: 'TN' },
+  Texas: { lat: 31.0545, lng: -97.5635, short: 'TX' },
+  Utah: { lat: 40.150, lng: -111.8624, short: 'UT' },
+  Vermont: { lat: 44.0459, lng: -72.7107, short: 'VT' },
+  Virginia: { lat: 37.7693, lng: -78.17, short: 'VA' },
+  Washington: { lat: 47.4009, lng: -121.4905, short: 'WA' },
+  'West Virginia': { lat: 38.4912, lng: -80.9545, short: 'WV' },
+  Wisconsin: { lat: 44.2685, lng: -89.6165, short: 'WI' },
+  Wyoming: { lat: 42.7560, lng: -107.3025, short: 'WY' },
+  'Washington D.C.': { lat: 38.9072, lng: -77.0369, short: 'DC' },
+  'Puerto Rico': { lat: 18.2208, lng: -66.5901, short: 'PR' },
+};
 
 const scopeMatches = (law: Law, filter: ScopeFilter) => {
   if (filter === 'all') return true;
@@ -72,13 +83,36 @@ const scopeMatches = (law: Law, filter: ScopeFilter) => {
   return law.level === 'city' || law.level === 'county';
 };
 
+const MapViewport: React.FC<{ selectedState: string | null }> = ({ selectedState }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (selectedState && selectedState !== 'Federal') {
+      const center = STATE_CENTERS[selectedState];
+      if (center) {
+        map.setView([center.lat, center.lng], SELECTED_ZOOM, { animate: true });
+        return;
+      }
+    }
+
+    if (selectedState === 'Federal') {
+      map.setView(STATE_CENTERS['Washington D.C.'] ? [STATE_CENTERS['Washington D.C.'].lat, STATE_CENTERS['Washington D.C.'].lng] : US_CENTER, 7, { animate: true });
+      return;
+    }
+
+    map.setView(US_CENTER, US_ZOOM, { animate: true });
+  }, [map, selectedState]);
+
+  return null;
+};
+
 const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
   const [selectedState, setSelectedState] = useState<string | null>(laws.find((law) => law.location.state)?.location.state || null);
 
   const stateTotals = useMemo(() => {
     return laws.reduce((acc: Record<string, number>, law) => {
-      if (!law.location.state) return acc;
+      if (!law.location.state || law.level === 'federal') return acc;
       acc[law.location.state] = (acc[law.location.state] || 0) + 1;
       return acc;
     }, {});
@@ -92,15 +126,25 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
     });
   }, [laws, scopeFilter, selectedState]);
 
-  const maxStateCount = Math.max(...(Object.values(stateTotals) as number[]), 1);
+  const maxStateCount = Math.max(...Object.values(stateTotals), 1);
   const federalCount = laws.filter((law) => law.level === 'federal').length;
+
+  const mapStates = useMemo(() => {
+    return Object.entries(stateTotals)
+      .filter(([state]) => Boolean(STATE_CENTERS[state]))
+      .map(([state, count]) => ({
+        state,
+        count,
+        center: STATE_CENTERS[state],
+      }));
+  }, [stateTotals]);
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-semibold tracking-tight text-slate-950">Map view</h2>
         <p className="max-w-2xl text-sm leading-6 text-slate-500">
-          Explore where the current legislation in your feed is coming from. Select a state marker or the federal layer to filter the list.
+          Explore where the legislation in your feed is coming from on a real OpenStreetMap layer. Select a state bubble or the federal marker to filter the list.
         </p>
       </div>
 
@@ -109,7 +153,7 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">United States legislation map</p>
-              <p className="text-xs text-slate-500">Bubble size reflects how many laws are currently loaded for that state.</p>
+              <p className="text-xs text-slate-500">Bubble size reflects how many loaded laws are tied to each state.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {[
@@ -131,46 +175,70 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.14),transparent_38%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)]">
-            <svg viewBox="0 0 860 450" className="h-auto w-full">
-              <rect x="0" y="0" width="860" height="450" fill="transparent" />
-              <path d={MAP_SHAPE} fill="#dbe7fb" stroke="#94a3b8" strokeWidth="5" strokeLinejoin="round" />
-              <path d="M90 388 C107 372 126 366 149 367" fill="none" stroke="#94a3b8" strokeWidth="4" strokeLinecap="round" />
-              <path d="M219 410 C236 399 258 396 280 401" fill="none" stroke="#94a3b8" strokeWidth="4" strokeLinecap="round" />
+          <div className="overflow-hidden rounded-[24px] border border-slate-200">
+            <MapContainer
+              center={US_CENTER}
+              zoom={US_ZOOM}
+              minZoom={3}
+              maxZoom={10}
+              scrollWheelZoom
+              className="h-[540px] w-full"
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              <MapViewport selectedState={selectedState} />
 
-              {(Object.entries(stateTotals) as Array<[string, number]>).map(([state, count]) => {
-                const point = STATE_POINTS[state];
-                if (!point) return null;
+              {mapStates.map(({ state, count, center }) => {
                 const isActive = selectedState === state;
-                const radius = 7 + (count / maxStateCount) * 15;
+                const radius = 10 + (count / maxStateCount) * 16;
                 return (
-                  <g key={state} className="cursor-pointer" onClick={() => setSelectedState(state)}>
-                    <circle
-                      cx={point.x}
-                      cy={point.y}
-                      r={radius}
-                      fill={isActive ? '#0f172a' : '#2563eb'}
-                      fillOpacity={isActive ? 0.95 : 0.8}
-                      stroke="#ffffff"
-                      strokeWidth="3"
-                    />
-                    <text x={point.x} y={point.y + 3} textAnchor="middle" className="fill-white text-[9px] font-semibold">
-                      {point.short}
-                    </text>
-                  </g>
+                  <CircleMarker
+                    key={state}
+                    center={[center.lat, center.lng]}
+                    radius={radius}
+                    pathOptions={{
+                      color: '#ffffff',
+                      weight: 2,
+                      fillColor: isActive ? '#0f172a' : '#2563eb',
+                      fillOpacity: isActive ? 0.92 : 0.78,
+                    }}
+                    eventHandlers={{
+                      click: () => setSelectedState((current) => current === state ? null : state),
+                    }}
+                  >
+                    <Popup>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">{state}</p>
+                        <p className="text-xs text-slate-600">{count} loaded law{count === 1 ? '' : 's'}</p>
+                      </div>
+                    </Popup>
+                  </CircleMarker>
                 );
               })}
 
-              <g className="cursor-pointer" onClick={() => setSelectedState('Federal')}>
-                <rect x="34" y="26" width="136" height="48" rx="16" fill={selectedState === 'Federal' ? '#0f172a' : '#ffffff'} stroke="#cbd5e1" strokeWidth="2" />
-                <text x="58" y="46" className={`text-[12px] font-semibold ${selectedState === 'Federal' ? 'fill-white' : 'fill-slate-900'}`}>
-                  Federal laws
-                </text>
-                <text x="58" y="62" className={`text-[11px] ${selectedState === 'Federal' ? 'fill-slate-300' : 'fill-slate-500'}`}>
-                  {federalCount} loaded
-                </text>
-              </g>
-            </svg>
+              <CircleMarker
+                center={[38.9072, -77.0369]}
+                radius={10 + Math.min(federalCount, 12)}
+                pathOptions={{
+                  color: '#ffffff',
+                  weight: 2,
+                  fillColor: selectedState === 'Federal' ? '#7c3aed' : '#111827',
+                  fillOpacity: 0.9,
+                }}
+                eventHandlers={{
+                  click: () => setSelectedState((current) => current === 'Federal' ? null : 'Federal'),
+                }}
+              >
+                <Popup>
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-900">Federal</p>
+                    <p className="text-xs text-slate-600">{federalCount} loaded law{federalCount === 1 ? '' : 's'}</p>
+                  </div>
+                </Popup>
+              </CircleMarker>
+            </MapContainer>
           </div>
         </section>
 
@@ -178,8 +246,7 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-slate-900">
-                {selectedState || 'All states'}
-                {selectedState === 'Federal' ? '' : selectedState ? ' legislation' : ' legislation'}
+                {selectedState ? `${selectedState} legislation` : 'All legislation'}
               </p>
               <p className="mt-1 text-xs text-slate-500">{filteredLaws.length} matching items in the current feed.</p>
             </div>
@@ -196,21 +263,27 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
                 <Landmark size={14} />
                 <span className="text-xs">Federal</span>
               </div>
-              <p className="mt-2 text-xl font-semibold text-slate-950">{laws.filter((law) => scopeMatches(law, 'federal') && (!selectedState || law.level === 'federal')).length}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950">
+                {laws.filter((law) => scopeMatches(law, 'federal') && (!selectedState || selectedState === 'Federal')).length}
+              </p>
             </div>
             <div className="rounded-2xl bg-slate-50 p-3">
               <div className="flex items-center gap-2 text-slate-500">
                 <Building2 size={14} />
                 <span className="text-xs">State</span>
               </div>
-              <p className="mt-2 text-xl font-semibold text-slate-950">{laws.filter((law) => scopeMatches(law, 'state') && (!selectedState || law.location.state === selectedState)).length}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950">
+                {laws.filter((law) => scopeMatches(law, 'state') && (!selectedState || law.location.state === selectedState)).length}
+              </p>
             </div>
             <div className="rounded-2xl bg-slate-50 p-3">
               <div className="flex items-center gap-2 text-slate-500">
                 <MapPin size={14} />
                 <span className="text-xs">Local</span>
               </div>
-              <p className="mt-2 text-xl font-semibold text-slate-950">{laws.filter((law) => scopeMatches(law, 'local') && (!selectedState || law.location.state === selectedState)).length}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-950">
+                {laws.filter((law) => scopeMatches(law, 'local') && (!selectedState || law.location.state === selectedState)).length}
+              </p>
             </div>
           </div>
 

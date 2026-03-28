@@ -23,7 +23,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-color text-white">
             <Globe size={24} />
           </div>
-          <h1 className="text-xl font-bold tracking-tight">CivicLens</h1>
+          <h1 className="text-xl font-bold tracking-tight">CulturAct</h1>
         </div>
 
         <div className="flex items-center gap-4">

@@ -1,6 +1,23 @@
-# CivicLens
+# CulturAct
 
-CivicLens is a location-aware legislative discovery app that combines live government data, Firebase-backed persistence, and Gemini-powered summarization. It helps users browse federal, state, county, and city legislation, understand what it means in plain language, compare laws, and use community features tied to their location.
+CulturAct is a location-aware legislative discovery app that combines live government data, Firebase-backed persistence, and Gemini-powered summarization. It helps users browse federal, state, county, and city legislation, understand what it means in plain language, compare laws, and use community features tied to their location.
+
+It is designed for both:
+
+- general civic users tracking everyday policy
+- communities affected by culture, identity, language, immigration, equity, and heritage legislation
+
+This project fits the Culture track because it focuses on how laws shape language, heritage, identity, belonging, and the day-to-day life of diverse communities, then gives those communities tools to understand and respond.
+
+## Elevator Pitch
+
+> Every year, bills are introduced that affect housing, education, work, immigration, language access, cultural funding, and community rights, but most people never hear about them until the impact is already real.
+>
+> CulturAct is an AI-powered civic platform where you choose who you are, where you live, and what issues matter to you, and it shows you the laws shaping your daily life and your community. Each law is pulled from real public sources, summarized in plain language, labeled by jurisdiction and impact, and explained in a way that connects policy to lived experience.
+>
+> Users can ask questions in natural language, compare laws, save what matters, explore legislation on a map, join neighborhood discussion, and take action through advocacy letters and representative contact tools.
+>
+> CulturAct helps people move from confusion to clarity, and from awareness to action.
 
 ## Current Scope
 
@@ -8,6 +25,7 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 - Federal data from Congress.gov, Federal Register, and GovInfo
 - State data from OpenStates
 - Local/county data from configured public source scrapers
+- Real OpenStreetMap-based map view for geographic exploration
 - Firebase Auth, Firestore caching, and community chat
 - Community tab with events, neighborhood chat, translators, shelters, legal help, and immigration resources
 - Analytics, map, saved laws, roadmap, digest, and AI assistant views
@@ -28,7 +46,8 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 ### Legislative Feed
 
 - Location-aware feed for the selected `state` and `city`
-- Topic filters including `#Housing`, `#Labor`, `#Education`, `#Immigration`, and `#Health`
+- Standard civic filters such as `#Housing`, `#Labor`, `#Education`, `#Health`, and `#Environment`
+- Culture-impact filters such as `#Immigration`, `#Language Access`, `#Indigenous Rights`, `#Arts & Culture Funding`, `#Racial Equity`, and `#Religious Freedom`
 - Primary-interest prioritization
 - Pagination for both the main feed and saved feed
 - Real public source links on each law card
@@ -50,7 +69,7 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 ### AI Features
 
 - Gemini-powered plain-language summaries
-- AI Civic Assistant chat drawer
+- CulturAct assistant chat drawer
 - Personalized context using the user’s saved situation
 - AI law comparison and conflict analysis
 - AI advocacy letter generation
@@ -59,8 +78,8 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 ### User Profile
 
 - Sign in with Firebase Auth
-- Save a personal situation/context statement
-- Follow and unfollow legislative topics
+- Save a personal or community context statement
+- Follow and unfollow standard civic topics and cultural impact tags
 - Store per-user profile data in Firestore
 - Representative cards with contact links
 
@@ -76,7 +95,8 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 ### Insights And Discovery
 
 - Analytics dashboard
-- Map-based exploration
+- Map-based exploration with OpenStreetMap
+- Clickable state and federal map markers that filter the current feed
 - Weekly Digest snapshot
 - Roadmap / feature status view
 - In-app notifications for feed and data warnings
@@ -89,12 +109,20 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 - Synthetic “coverage” placeholder laws were removed.
 - Every law must have a public `sourceUrl` to survive normalization and deduplication.
 - Congress API URLs are normalized to public Congress webpages before rendering or caching.
+- The classifier supports both regular civic categories and culture-focused impact categories.
 
 ### Correct Jurisdiction Labels
 
 - Laws are classified as `Federal`, `State`, `County`, or `City` using source URL and identifier patterns.
 - OpenStates bills are labeled as `State`.
 - Congress.gov, Federal Register, and GovInfo items are labeled as `Federal`.
+
+### Map View
+
+- The map uses OpenStreetMap tiles through `react-leaflet`.
+- State bubbles scale with the number of laws currently loaded for that state.
+- A dedicated federal marker filters federal laws.
+- Selecting the same marker again clears that map selection.
 
 ### Canonical Law Deduplication
 
@@ -302,6 +330,8 @@ Google Authentication must be enabled in Firebase Console, and `localhost` must 
 - Express
 - Firebase Auth
 - Firestore
+- Leaflet
+- React Leaflet
 - Axios
 - Motion
 - Lucide React
