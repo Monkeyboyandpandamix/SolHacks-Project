@@ -145,7 +145,7 @@ export default function App() {
     try {
       const primaryInterest = settings.interests[0] || 'all';
       // 1. Check Cache in Firestore
-      const cacheKey = `${settings.location.state}_${settings.location.city}_${settings.language}_${primaryInterest}`;
+      const cacheKey = `v2_${settings.location.state}_${settings.location.city}_${settings.language}_${primaryInterest}`;
       const cacheRef = doc(db, 'laws_cache', cacheKey);
       let data: Law[] = [];
       const CACHE_LIMIT = 4 * 60 * 60 * 1000; // 4 hours

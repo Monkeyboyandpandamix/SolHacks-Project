@@ -170,7 +170,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
   const documents = rawData.documents?.packages || rawData.documents?.results || [];
   const scraped = Array.isArray(rawData.scraped) ? rawData.scraped : [];
 
-  federalBills.slice(0, 3).forEach((bill: any, index: number) => {
+  federalBills.forEach((bill: any, index: number) => {
     laws.push(createLawFromRaw({
       id: bill.number || bill.billNumber || `FED-${index}`,
       title: bill.title || bill.shortTitle || "Federal legislation update",
@@ -182,7 +182,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
     }, state, city));
   });
 
-  federalRegisterDocs.slice(0, 2).forEach((doc: any, index: number) => {
+  federalRegisterDocs.forEach((doc: any, index: number) => {
     laws.push(createLawFromRaw({
       id: doc.document_number || `FR-${index}`,
       title: doc.title || doc.type || "Federal Register update",
@@ -194,7 +194,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
     }, state, city));
   });
 
-  stateBills.slice(0, 3).forEach((bill: any, index: number) => {
+  stateBills.forEach((bill: any, index: number) => {
     laws.push(createLawFromRaw({
       id: bill.identifier || bill.id || `STATE-${index}`,
       title: bill.title || bill.identifier || "State legislation update",
@@ -206,7 +206,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
     }, state, city));
   });
 
-  documents.slice(0, 2).forEach((doc: any, index: number) => {
+  documents.forEach((doc: any, index: number) => {
     laws.push(createLawFromRaw({
       id: doc.packageId || `DOC-${index}`,
       title: doc.title || doc.collectionName || "Government document",
@@ -218,7 +218,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
     }, state, city));
   });
 
-  scraped.slice(0, 3).forEach((item: any, index: number) => {
+  scraped.forEach((item: any, index: number) => {
     laws.push(createLawFromRaw({
       id: item.id || `SCRAPE-${index}`,
       title: item.title || "Local legislative item",
