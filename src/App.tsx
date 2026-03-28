@@ -121,6 +121,7 @@ function buildLegacyCachePrefixes(state: string, city: string, language: string)
   return [
     `v2_${state}_${city}_${language}_`,
     `v3_${state}_${city}_${language}`,
+    `v4_${state}_${city}_${language}`,
   ];
 }
 
@@ -221,7 +222,7 @@ export default function App() {
     setError(null);
     try {
       // 1. Check Cache in Firestore
-      const cacheKey = `v4_${settings.location.state}_${settings.location.city}_${settings.language}`;
+      const cacheKey = `v5_${settings.location.state}_${settings.location.city}_${settings.language}`;
       const cacheRef = doc(db, 'laws_cache', cacheKey);
       let data: Law[] = [];
       let cachedLaws: Law[] = [];

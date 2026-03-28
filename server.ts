@@ -13,6 +13,7 @@ const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GE
 const stateLegislationCache = new Map<string, { data: any; timestamp: number }>();
 const stateLegislationBackoff = new Map<string, number>();
 const STATE_CACHE_TTL = 6 * 60 * 60 * 1000;
+const STATE_RESULT_LIMIT = 40;
 
 const CITY_DIRECTORY: Record<string, string[]> = {
   California: ["San Francisco", "San Diego", "San Jose", "Sacramento", "Oakland", "Los Angeles"],
@@ -160,6 +161,103 @@ async function generateAiText(prompt: string): Promise<string | null> {
 
 function normalizeLocationLabel(state: string, city: string) {
   return city?.trim() ? `${city}, ${state}` : state;
+}
+
+function decodeHtml(value?: string) {
+  if (!value) return "";
+  return cheerio.load(`<span>${value}</span>`)("span").text().trim();
+}
+
+function legiscanStatusToText(status?: number) {
+  switch (status) {
+    case 1:
+      return "introduced";
+    case 2:
+      return "in committee";
+    case 3:
+      return "engrossed";
+    case 4:
+      return "passed";
+    case 5:
+      return "vetoed";
+    default:
+      return "updated";
+  }
+}
+
+async function fetchOpenStatesBills(state: string, apiKey: string) {
+  const response = await axios.get("https://v3.openstates.org/bills", {
+    params: { jurisdiction: state, sort: "updated_desc", per_page: 20, apikey: apiKey },
+    timeout: 15000,
+  });
+
+  const results = Array.isArray(response.data?.results) ? response.data.results : [];
+  return results.map((bill: any) => ({
+    ...bill,
+    sourceSystem: "openstates",
+  }));
+}
+
+async function fetchLegiScanBills(state: string, apiKey: string) {
+  const stateCode = STATE_CODES[state];
+  if (!stateCode) return [];
+
+  const response = await axios.get("https://api.legiscan.com/", {
+    params: { key: apiKey, op: "getMasterList", state: stateCode },
+    timeout: 20000,
+  });
+
+  const masterlist = response.data?.masterlist;
+  if (!masterlist || typeof masterlist !== "object") return [];
+
+  return Object.entries(masterlist)
+    .filter(([key, value]) => key !== "session" && value && typeof value === "object")
+    .map(([, bill]: [string, any]) => ({
+      id: `legiscan-${bill.bill_id}`,
+      identifier: decodeHtml(bill.number),
+      title: decodeHtml(bill.title) || decodeHtml(bill.description) || "State legislation update",
+      description: decodeHtml(bill.description),
+      openstates_url: bill.url,
+      updated_at: bill.last_action_date || bill.status_date,
+      latest_action_description: decodeHtml(bill.last_action) || legiscanStatusToText(Number(bill.status)),
+      classification: [legiscanStatusToText(Number(bill.status))],
+      sourceSystem: "legiscan",
+      legiscan_bill_id: bill.bill_id,
+      status: Number(bill.status) || 0,
+    }))
+    .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+    .slice(0, STATE_RESULT_LIMIT);
+}
+
+function mergeStateBills(openStatesBills: any[], legiscanBills: any[]) {
+  const merged = new Map<string, any>();
+
+  for (const bill of [...openStatesBills, ...legiscanBills]) {
+    const key = String(bill.identifier || bill.id || bill.openstates_url || bill.url || bill.title || "").toLowerCase();
+    if (!key) continue;
+
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, bill);
+      continue;
+    }
+
+    merged.set(key, {
+      ...existing,
+      ...bill,
+      title: bill.title || existing.title,
+      description: bill.description || existing.description,
+      openstates_url: existing.openstates_url || bill.openstates_url,
+      updated_at: existing.updated_at > bill.updated_at ? existing.updated_at : bill.updated_at,
+      latest_action_description: bill.latest_action_description || existing.latest_action_description,
+      classification: Array.from(new Set([...(existing.classification || []), ...(bill.classification || [])])),
+      sourceSystem: existing.sourceSystem === "openstates" ? existing.sourceSystem : bill.sourceSystem,
+    });
+  }
+
+  return Array.from(merged.values())
+    .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+    .slice(0, STATE_RESULT_LIMIT);
 }
 
 function fallbackCommunityEvents(state: string, city: string) {
@@ -495,9 +593,10 @@ async function startServer() {
 
   app.get("/api/legislation/state", async (req, res) => {
     try {
-      const apiKey = process.env.OPENSTATES_API_KEY;
+      const openStatesApiKey = process.env.OPENSTATES_API_KEY;
+      const legiscanApiKey = process.env.LEGISCAN_API_KEY;
       const state = String(req.query.state || "").trim();
-      if (!apiKey) return res.status(500).json({ error: "OPENSTATES_API_KEY not configured" });
+      if (!openStatesApiKey && !legiscanApiKey) return res.status(500).json({ error: "No state legislation API key configured" });
       if (!state) return res.status(400).json({ error: "State parameter is required" });
 
       const cacheKey = state;
@@ -538,26 +637,47 @@ async function startServer() {
         });
       }
 
-      const response = await axios.get("https://v3.openstates.org/bills", {
-        params: { jurisdiction: state, sort: "updated_desc", per_page: 20, apikey: apiKey },
-        timeout: 15000,
-      });
+      const [openStatesResult, legiscanResult] = await Promise.allSettled([
+        openStatesApiKey ? fetchOpenStatesBills(state, openStatesApiKey) : Promise.resolve([]),
+        legiscanApiKey ? fetchLegiScanBills(state, legiscanApiKey) : Promise.resolve([]),
+      ]);
+
+      const openStatesBills = openStatesResult.status === "fulfilled" ? openStatesResult.value : [];
+      const legiscanBills = legiscanResult.status === "fulfilled" ? legiscanResult.value : [];
+      const mergedResults = mergeStateBills(openStatesBills, legiscanBills);
+
+      if (mergedResults.length === 0) {
+        throw openStatesResult.status === "rejected"
+          ? openStatesResult.reason
+          : legiscanResult.status === "rejected"
+            ? legiscanResult.reason
+            : new Error("No state legislation results returned");
+      }
+
       stateLegislationBackoff.delete(cacheKey);
       stateLegislationCache.set(cacheKey, {
         data: {
-          ...response.data,
+          results: mergedResults,
           meta: {
             cached: false,
             rateLimited: false,
+            sources: {
+              openstates: openStatesBills.length,
+              legiscan: legiscanBills.length,
+            },
           },
         },
         timestamp: Date.now(),
       });
       res.json({
-        ...response.data,
+        results: mergedResults,
         meta: {
           cached: false,
           rateLimited: false,
+          sources: {
+            openstates: openStatesBills.length,
+            legiscan: legiscanBills.length,
+          },
         },
       });
     } catch (error: any) {
