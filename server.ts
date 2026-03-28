@@ -117,7 +117,7 @@ async function scrapeLegislationSource(source: { url: string; level: "city" | "c
       list.findIndex((item) => item.title === entry.title || item.sourceUrl === entry.sourceUrl) === index
     );
 
-    return deduped.slice(0, 4);
+    return deduped;
   } catch (error: any) {
     console.error(`Scraper Error (${source.url}):`, error.message);
     return [];
@@ -354,8 +354,8 @@ async function startServer() {
       if (!apiKey) return res.status(500).json({ error: "CONGRESS_GOV_API_KEY not configured" });
 
       const response = await axios.get("https://api.congress.gov/v3/bill", {
-        params: { api_key: apiKey, format: "json", limit: 10, sort: "updateDate+desc" },
-        timeout: 5000,
+        params: { api_key: apiKey, format: "json", limit: 50, sort: "updateDate+desc" },
+        timeout: 10000,
       });
       res.json(response.data);
     } catch (error: any) {
@@ -368,10 +368,10 @@ async function startServer() {
     try {
       const response = await axios.get("https://www.federalregister.gov/api/v1/documents.json", {
         params: {
-          per_page: 10,
+          per_page: 25,
           order: "newest",
         },
-        timeout: 5000,
+        timeout: 10000,
       });
       res.json(response.data);
     } catch (error: any) {
@@ -449,7 +449,7 @@ async function startServer() {
         list.findIndex((item) => item.title === entry.title || item.sourceUrl === entry.sourceUrl) === index
       );
 
-      res.json(deduped.slice(0, 8));
+      res.json(deduped);
     } catch (error: any) {
       console.error("Scraper Error:", error.message);
       res.json([]);
