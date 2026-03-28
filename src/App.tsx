@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Bookmark, 
@@ -16,6 +16,7 @@ import {
   Search,
   Filter,
   ChevronRight,
+  ChevronUp,
   TrendingUp,
   Globe,
   Building2,
@@ -40,7 +41,7 @@ import AnalyticsView from './components/AnalyticsView';
 import RepresentativeCard from './components/RepresentativeCard';
 import AILawyer from './components/AILawyer';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
-import { fetchLaws, localizeLaws } from './services/geminiService';
+import { fetchLaws } from './services/geminiService';
 
 import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
 import { collection, doc, getDoc, setDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
@@ -54,6 +55,8 @@ export default function App() {
     return saved ? JSON.parse(saved) : {
       highContrast: false,
       largeFont: false,
+      reduceMotion: false,
+      underlineLinks: false,
       language: "English",
       location: {
         state: "California",
@@ -74,8 +77,35 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [lawsToCompare, setLawsToCompare] = useState<Law[]>([]);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [savedPage, setSavedPage] = useState(1);
+
+  useEffect(() => {
+    // Keydown shortcut
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Scroll progress
+    const handleScroll = () => {
+      const totalScroll = document.documentElement.scrollTop;
+      const windowHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+      const scroll = windowHeight ? totalScroll / windowHeight : 0;
+      setScrollProgress(scroll);
+    };
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   // Auth Listener
   useEffect(() => {
@@ -164,14 +194,6 @@ export default function App() {
       if (data.length === 0) {
         setError("No laws found for your location. Try adjusting your settings.");
       }
-
-      if (data.length > 0 && settings.language !== 'English') {
-        console.log("Applying final localization pass", {
-          language: settings.language,
-          count: data.length,
-        });
-        data = await localizeLaws(data, settings.language);
-      }
       
       // Merge with saved status from local storage (or Firestore later)
       const savedIds = JSON.parse(localStorage.getItem('civiclens_saved') || '[]');
@@ -198,7 +220,8 @@ export default function App() {
     
     // Apply accessibility classes to body
     document.body.classList.toggle('high-contrast', settings.highContrast);
-    document.body.classList.toggle('large-font', settings.largeFont);
+    document.body.classList.toggle('reduce-motion', !!settings.reduceMotion);
+    document.body.classList.toggle('underline-links', !!settings.underlineLinks);
   }, [settings]);
 
   const handleSaveSituation = async (situation: string) => {
@@ -381,9 +404,15 @@ export default function App() {
 
   return (
     <div className={`min-h-screen bg-background-color text-text-primary ${settings.largeFont ? 'text-lg' : 'text-base'}`}>
+      {/* Scroll Progress Bar */}
+      <motion.div 
+        className="fixed top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 z-50 origin-left"
+        style={{ scaleX: scrollProgress }}
+      />
       {/* Sidebar Navigation */}
-      <aside className="fixed left-0 top-0 z-40 h-screen w-72 border-r border-slate-200 bg-white p-8 transition-transform sm:translate-x-0">
-        <div className="mb-12 flex items-center gap-4">
+      <aside className="fixed left-0 top-0 z-40 h-screen w-72 border-r border-slate-200 bg-white sm:translate-x-0 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar pb-32">
+          <div className="mb-12 flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200">
             <Scale size={28} />
           </div>
@@ -394,55 +423,27 @@ export default function App() {
         </div>
 
         <nav className="space-y-3">
-          <button 
-            onClick={() => setActiveTab('feed')}
-            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'feed' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
-          >
-            <LayoutDashboard size={20} />
-            LEGISLATIVE FEED
-          </button>
-          <button 
-            onClick={() => setActiveTab('saved')}
-            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'saved' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
-          >
-            <Bookmark size={20} />
-            SAVED LAWS
-          </button>
-          <button 
-            onClick={() => setActiveTab('map')}
-            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'map' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
-          >
-            <Map size={20} />
-            MAP VIEW
-          </button>
-          <button 
-            onClick={() => setActiveTab('digest')}
-            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'digest' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
-          >
-            <Zap size={20} />
-            WEEKLY DIGEST
-          </button>
-          <button 
-            onClick={() => setActiveTab('profile')}
-            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'profile' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
-          >
-            <UserIcon size={20} />
-            MY PROFILE
-          </button>
-          <button 
-            onClick={() => setActiveTab('roadmap')}
-            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'roadmap' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
-          >
-            <History size={20} />
-            ROADMAP
-          </button>
-          <button 
-            onClick={() => setActiveTab('analytics')}
-            className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === 'analytics' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
-          >
-            <BarChart3 size={20} />
-            ANALYTICS
-          </button>
+          {[
+            { id: 'feed', icon: LayoutDashboard, label: 'LEGISLATIVE FEED' },
+            { id: 'saved', icon: Bookmark, label: 'SAVED LAWS' },
+            { id: 'map', icon: Map, label: 'MAP VIEW' },
+            { id: 'digest', icon: Zap, label: 'WEEKLY DIGEST' },
+            { id: 'profile', icon: UserIcon, label: 'MY PROFILE' },
+            { id: 'roadmap', icon: History, label: 'ROADMAP' },
+            { id: 'analytics', icon: BarChart3, label: 'ANALYTICS' },
+          ].map(tab => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`relative flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === tab.id ? 'text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+            >
+              {activeTab === tab.id && (
+                <motion.div layoutId="activeTab" className="absolute inset-0 bg-indigo-600 rounded-2xl" />
+              )}
+              <tab.icon size={20} className="relative z-10" />
+              <span className="relative z-10">{tab.label}</span>
+            </button>
+          ))}
         </nav>
 
         <div className="mt-12 border-t border-slate-100 pt-10">
@@ -472,25 +473,30 @@ export default function App() {
             ))}
           </div>
         </div>
+        </div>
 
-        <div className="absolute bottom-8 left-8 right-8">
+        <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md p-6 border-t border-slate-100">
           {user ? (
-            <div className="flex items-center gap-4 rounded-3xl bg-slate-50 p-4">
+            <div className="flex items-center gap-4 rounded-3xl bg-slate-50 p-4 border border-slate-100">
               <div className="h-10 w-10 rounded-2xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 font-black text-sm">
                 {user.email?.[0].toUpperCase()}
               </div>
               <div className="flex-1 overflow-hidden">
                 <p className="truncate text-xs font-black text-slate-900">{user.email}</p>
-                <button onClick={logOut} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">SIGN OUT</button>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <button onClick={logOut} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">SIGN OUT</button>
+                </div>
               </div>
             </div>
           ) : (
-            <button 
-              onClick={signIn}
-              className="flex w-full items-center justify-center gap-3 rounded-3xl bg-indigo-600 py-5 text-xs font-black text-white shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
-            >
-              SIGN IN WITH GOOGLE
-            </button>
+            <div className="space-y-4">
+              <button 
+                onClick={signIn}
+                className="flex w-full items-center justify-center gap-3 rounded-3xl bg-indigo-600 py-5 text-xs font-black text-white shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                SIGN IN WITH GOOGLE
+              </button>
+            </div>
           )}
         </div>
       </aside>
@@ -509,10 +515,14 @@ export default function App() {
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input 
+                ref={searchInputRef}
                 type="text" 
                 placeholder="Search laws, bills, or topics..."
-                className="h-12 w-80 rounded-2xl bg-slate-100 pl-12 pr-4 text-xs font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
+                className="h-12 w-80 rounded-2xl bg-slate-100 pl-12 pr-12 text-xs font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
               />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
+                <kbd className="hidden sm:inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-black text-slate-500">⌘K</kbd>
+              </div>
             </div>
           </div>
 
@@ -617,6 +627,30 @@ export default function App() {
                       <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.largeFont ? 'ml-7' : 'ml-1'}`} />
                     </button>
                   </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">Reduce Motion</p>
+                      <p className="text-xs font-bold text-slate-400">Minimize animations and transitions.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ reduceMotion: !settings.reduceMotion })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.reduceMotion ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.reduceMotion ? 'ml-7' : 'ml-1'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">Underline Links</p>
+                      <p className="text-xs font-bold text-slate-400">Highlight interactive elements.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ underlineLinks: !settings.underlineLinks })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.underlineLinks ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.underlineLinks ? 'ml-7' : 'ml-1'}`} />
+                    </button>
+                  </div>
                 </div>
                 <button 
                   onClick={() => setShowSettings(false)}
@@ -630,6 +664,20 @@ export default function App() {
         </AnimatePresence>
 
         <div className="px-12 py-10">
+          <AnimatePresence>
+            {scrollProgress > 0.1 && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="fixed bottom-10 right-10 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-200 transition-transform active:scale-95"
+              >
+                <ChevronUp size={24} />
+              </motion.button>
+            )}
+          </AnimatePresence>
+
           <AnimatePresence>
             {showLocationSelector && (
               <motion.div
@@ -713,9 +761,11 @@ export default function App() {
               >
                 <div className="flex items-end justify-between">
                   <div>
-                    <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Legislative Feed</h2>
-                    <p className="mt-2 font-bold text-slate-400">
-                      Real-time updates on laws affecting {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state}` : settings.location.state}.
+                    <h2 className="text-4xl font-black tracking-tighter text-indigo-950">
+                      {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}!
+                    </h2>
+                    <p className="mt-2 text-sm font-bold text-slate-400">
+                      Here's your real-time feed for {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state}` : settings.location.state}.
                     </p>
                   </div>
                   <div className="flex gap-3">
@@ -737,7 +787,8 @@ export default function App() {
                 </div>
 
                 <LawFeed 
-                  laws={paginatedLaws} 
+                  laws={paginatedLaws}
+                  allLaws={prioritizedFilteredLaws}
                   isLoading={isLoading} 
                   error={error} 
                   onSave={handleSaveLaw} 
@@ -769,7 +820,8 @@ export default function App() {
                 </div>
                 {savedLaws.length > 0 ? (
                   <LawFeed 
-                    laws={paginatedSavedLaws} 
+                    laws={paginatedSavedLaws}
+                    allLaws={savedLaws}
                     isLoading={false} 
                     error={null} 
                     onSave={handleSaveLaw} 

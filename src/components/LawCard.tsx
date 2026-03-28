@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bookmark, Share2, ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, CheckCircle, Clock, AlertTriangle, XCircle, Globe, Map, Building2, Landmark, MessageSquare, Send, BarChart3, Sparkles, BookOpen, Mail, Copy, Check } from 'lucide-react';
+import { Bookmark, Share2, ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, CheckCircle, Clock, AlertTriangle, XCircle, Globe, Map, Building2, Landmark, MessageSquare, Send, BarChart3, Sparkles, BookOpen, Mail, Copy, Check, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Law, Comment } from '../types';
 import { generateAdvocacyLetter } from '../services/geminiService';
@@ -23,6 +23,44 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
   const [generatedLetter, setGeneratedLetter] = useState<string | null>(null);
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [showHeart, setShowHeart] = useState(false);
+
+  const totalChars = (law.originalText?.length || 0) + (law.simplifiedSummary?.length || 0);
+  const readingTime = Math.max(1, Math.ceil(totalChars / 1000));
+  const totalEngagements = (law.votes?.support || 0) + (law.votes?.oppose || 0) + (law.comments?.length || 0);
+  const isTrending = totalEngagements >= 10;
+
+  React.useEffect(() => {
+    return () => window.speechSynthesis.cancel();
+  }, []);
+
+  const toggleSpeech = () => {
+    if (isPlaying) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+    } else {
+      const utterance = new SpeechSynthesisUtterance(law.simplifiedSummary);
+      utterance.onend = () => setIsPlaying(false);
+      window.speechSynthesis.speak(utterance);
+      setIsPlaying(true);
+    }
+  };
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(`Check out this legislation: ${law.title}\n\nSummary: ${law.simplifiedSummary}\n\nImpact: ${law.impact || 'See more details in the app.'}`);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
+
+  const handleDoubleClick = () => {
+    if (law.userVote !== 'support') {
+      onVote(law.id, 'support');
+    }
+    setShowHeart(true);
+    setTimeout(() => setShowHeart(false), 1000);
+  };
 
   const statusIcons = {
     proposed: <Clock size={16} className="text-amber-600" />,
@@ -102,9 +140,15 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               {law.level}
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            <Clock size={14} />
-            {law.date}
+          <div className="flex gap-2">
+            <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              <Clock size={14} />
+              {law.date}
+            </div>
+            <div className="hidden sm:flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+              <BookOpen size={14} />
+              {readingTime} MIN READ
+            </div>
           </div>
         </div>
 
@@ -112,7 +156,18 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="h-1.5 w-12 rounded-full bg-indigo-600" />
-              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">{law.category}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">{law.category}</p>
+                {isTrending && (
+                  <div className="flex items-center gap-1.5 rounded-full bg-rose-50 px-2 py-0.5 text-[8px] font-black text-rose-600 uppercase tracking-widest border border-rose-100 ml-1 shadow-sm">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-rose-500"></span>
+                    </span>
+                    TRENDING
+                  </div>
+                )}
+              </div>
             </div>
             {onToggleFollowTopic && (
               <button 
@@ -126,11 +181,39 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
           <h3 className="text-3xl font-black leading-tight tracking-tighter text-indigo-950">{law.title}</h3>
         </div>
 
-        <div className="mb-8 rounded-[32px] bg-slate-50 p-8 border-2 border-slate-100">
-          <h4 className="mb-4 flex items-center gap-3 text-xs font-black text-indigo-600 uppercase tracking-widest">
-            <Info size={20} />
-            The Gist
-          </h4>
+        <div 
+          onDoubleClick={handleDoubleClick}
+          className="mb-8 rounded-[32px] bg-slate-50 p-8 border-2 border-slate-100 relative cursor-pointer select-none group"
+        >
+          <AnimatePresence>
+            {showHeart && (
+              <motion.div 
+                initial={{ scale: 0.5, opacity: 0, x: '-50%', y: '-50%' }}
+                animate={{ scale: [1.2, 1], opacity: 1 }}
+                exit={{ scale: 1.5, opacity: 0 }}
+                className="absolute left-1/2 top-1/2 z-10 text-emerald-500 drop-shadow-xl pointer-events-none"
+              >
+                <ThumbsUp size={80} fill="currentColor" />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="flex items-center gap-3 text-xs font-black text-indigo-600 uppercase tracking-widest">
+              <Info size={20} />
+              The Gist
+              <span className="text-slate-400/50 font-bold ml-2 text-[10px] hidden sm:inline-block transition-opacity opacity-0 group-hover:opacity-100">
+                (Double-tap to support)
+              </span>
+            </h4>
+            <button 
+              onClick={toggleSpeech}
+              className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
+              title={isPlaying ? "Stop listening" : "Listen to summary"}
+            >
+              {isPlaying ? <VolumeX size={16} /> : <Volume2 size={16} />}
+              {isPlaying ? "STOP" : "LISTEN"}
+            </button>
+          </div>
           <p className="text-xl font-bold leading-relaxed text-slate-700">{law.simplifiedSummary}</p>
         </div>
 
@@ -194,6 +277,13 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
           </div>
 
           <div className="flex items-center gap-4">
+            <button 
+              onClick={handleShare}
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 transition-all ${shareCopied ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-xl shadow-emerald-100' : 'border-slate-100 text-slate-400 hover:border-indigo-600 hover:text-indigo-600'}`}
+              title="Share"
+            >
+              {shareCopied ? <Check size={22} /> : <Share2 size={22} />}
+            </button>
             {onCompare && (
               <button 
                 onClick={() => onCompare(law)}
