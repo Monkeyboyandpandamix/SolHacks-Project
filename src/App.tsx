@@ -863,7 +863,7 @@ export default function App() {
                         PRIMARY: #{primaryInterest.toUpperCase()}
                       </div>
                     )}
-                    {['Housing', 'Labor', 'Education', 'Immigration', 'Health'].map(topic => (
+                    {['Language Rights', 'Indigenous Rights', 'Arts & Culture Funding', 'Racial Equity', 'Religious Freedom', 'LGBTQ+ Rights', 'Refugee', 'Voting Access', 'Housing', 'Labor', 'Education', 'Health'].map(topic => (
                       <button 
                         key={topic}
                         onClick={() => setInterestFilter(topic.toLowerCase())}
@@ -1050,7 +1050,7 @@ export default function App() {
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-4">
-                        {['Housing', 'Immigration', 'Labor', 'Education', 'Health', 'Environment', 'Taxes', 'Transport'].map(topic => (
+                        {['Language Rights', 'Indigenous Rights', 'Arts & Culture Funding', 'Racial Equity', 'Religious Freedom', 'LGBTQ+ Rights', 'Refugee', 'Voting Access', 'Housing', 'Immigration', 'Education', 'Health', 'Environment'].map(topic => (
                           <button 
                             key={topic}
                             onClick={() => handleToggleFollowTopic(topic)}

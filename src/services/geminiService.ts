@@ -46,6 +46,18 @@ const glossaryByCategory: Record<string, { term: string; definition: string }[]>
 
 function inferCategory(title: string, summary: string) {
   const haystack = `${title} ${summary}`.toLowerCase();
+  
+  // High-priority Cultural Impact Tags
+  if (/(language|translation|interpreter|linguistic|bilingual)/.test(haystack)) return "Language Rights";
+  if (/(indigenous|native american|tribe|tribal|reservation)/.test(haystack)) return "Indigenous Rights";
+  if (/(art|culture|museum|library|music|theater|creative|humanities)/.test(haystack)) return "Arts & Culture Funding";
+  if (/(race|racial|equity|discrimination|civil rights|diversity|inclusion)/.test(haystack)) return "Racial Equity";
+  if (/(religion|religious|faith|church|worship|chaplain)/.test(haystack)) return "Religious Freedom";
+  if (/(lgbt|queer|gay|transgender|sexual orientation|gender identity)/.test(haystack)) return "LGBTQ+ Rights";
+  if (/(refugee|asylum|resettlement)/.test(haystack)) return "Refugee";
+  if (/(vote|voting|ballot|election|polling|voter)/.test(haystack)) return "Voting Access";
+  
+  // Original / Generic Tags
   if (/(rent|tenant|housing|zoning|homeless)/.test(haystack)) return "Housing";
   if (/(wage|worker|employment|labor|union|leave)/.test(haystack)) return "Labor";
   if (/(school|student|teacher|college|education)/.test(haystack)) return "Education";
@@ -53,6 +65,7 @@ function inferCategory(title: string, summary: string) {
   if (/(immigration|migrant|visa|citizen)/.test(haystack)) return "Immigration";
   if (/(climate|water|emission|environment|energy)/.test(haystack)) return "Environment";
   if (/(tax|budget|revenue|appropriation)/.test(haystack)) return "Taxes";
+  
   return "Civic";
 }
 
