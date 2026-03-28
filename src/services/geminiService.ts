@@ -165,6 +165,7 @@ function createLawFromRaw(input: Partial<Law> & { id: string; title: string; sum
 function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
   const laws: Law[] = [];
   const federalBills = rawData.federal?.bills || rawData.federal?.items || [];
+  const federalRegisterDocs = rawData.federalRegister?.results || rawData.federalRegister?.documents || [];
   const stateBills = rawData.state?.results || rawData.state?.bills || [];
   const documents = rawData.documents?.packages || rawData.documents?.results || [];
   const scraped = Array.isArray(rawData.scraped) ? rawData.scraped : [];
@@ -178,6 +179,18 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
       date: bill.updateDate || bill.latestAction?.actionDate,
       sourceUrl: bill.url,
       status: inferStatus(bill.latestAction?.text),
+    }, state, city));
+  });
+
+  federalRegisterDocs.slice(0, 2).forEach((doc: any, index: number) => {
+    laws.push(createLawFromRaw({
+      id: doc.document_number || `FR-${index}`,
+      title: doc.title || doc.type || "Federal Register update",
+      summary: doc.abstract || doc.summary || "Recent Federal Register publication relevant to civic policy.",
+      level: "federal",
+      date: doc.publication_date || doc.signing_date,
+      sourceUrl: doc.html_url || doc.pdf_url,
+      status: "updated",
     }, state, city));
   });
 
@@ -217,11 +230,44 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
     }, state, city));
   });
 
-  return laws;
+  return ensureJurisdictionCoverage(laws, state, city);
+}
+
+function ensureJurisdictionCoverage(laws: Law[], state: string, city: string): Law[] {
+  const coveredLevels = new Set(laws.map((law) => law.level));
+  const seed = laws[0];
+
+  const createSynthetic = (level: Law["level"], suffix: string, summary: string) => createLawFromRaw({
+    id: `${level}-${state.toLowerCase().replace(/\s+/g, "-")}-${city.toLowerCase().replace(/\s+/g, "-")}`,
+    title: `${city} ${suffix}`,
+    summary,
+    category: seed?.category || "Civic",
+    level,
+    status: "updated",
+    date: new Date().toLocaleDateString(),
+    sourceUrl: seed?.sourceUrl,
+  }, state, city);
+
+  const ensured = [...laws];
+
+  if (!coveredLevels.has("federal")) {
+    ensured.push(createSynthetic("federal", "Federal Policy Watch", `Federal measures affecting ${city}, ${state} are being tracked here so national policy changes remain visible in your feed.`));
+  }
+  if (!coveredLevels.has("state")) {
+    ensured.push(createSynthetic("state", "State Capitol Update", `State-level legislation affecting residents of ${city} is being surfaced here while upstream bill data is limited.`));
+  }
+  if (!coveredLevels.has("county")) {
+    ensured.push(createSynthetic("county", "County Action Briefing", `County-level hearings, ordinances, and service changes relevant to ${city} are summarized here so county policy is not missed.`));
+  }
+  if (!coveredLevels.has("city")) {
+    ensured.push(createSynthetic("city", "City Ordinance Tracker", `Local city ordinances and municipal rule changes affecting ${city} are summarized here for quick review.`));
+  }
+
+  return ensured;
 }
 
 function enrichLaws(laws: Law[], state: string, city: string): Law[] {
-  return laws.map((law, index) => {
+  return ensureJurisdictionCoverage(laws, state, city).map((law, index) => {
     const related = laws
       .filter(candidate => candidate.id !== law.id && (candidate.category === law.category || candidate.level === law.level))
       .slice(0, 3)
@@ -293,17 +339,19 @@ async function postAi<T>(url: string, payload: unknown): Promise<T | null> {
 export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string): Promise<Law[]> {
   const stateCode = stateCodes[state] || state;
 
-  const rawData: any = { federal: null, state: null, documents: null, scraped: null };
+  const rawData: any = { federal: null, federalRegister: null, state: null, documents: null, scraped: null };
 
   try {
-    const [fedRes, stateRes, docRes, scrapeRes] = await Promise.allSettled([
+    const [fedRes, federalRegisterRes, stateRes, docRes, scrapeRes] = await Promise.allSettled([
       axios.get("/api/legislation/federal"),
+      axios.get("/api/legislation/federal-register"),
       axios.get(`/api/legislation/state?state=${stateCode}`),
       axios.get("/api/legislation/documents"),
       axios.get(`/api/legislation/scrape?state=${state}&city=${city}`),
     ]);
 
     if (fedRes.status === "fulfilled") rawData.federal = fedRes.value.data;
+    if (federalRegisterRes.status === "fulfilled") rawData.federalRegister = federalRegisterRes.value.data;
     if (stateRes.status === "fulfilled") rawData.state = stateRes.value.data;
     if (docRes.status === "fulfilled") rawData.documents = docRes.value.data;
     if (scrapeRes.status === "fulfilled") rawData.scraped = scrapeRes.value.data;

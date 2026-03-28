@@ -20,6 +20,71 @@
     @apply bg-slate-50 text-slate-900 antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
+
+  body.large-font {
+    font-size: 112.5%;
+  }
+
+  body.large-font button,
+  body.large-font input,
+  body.large-font select,
+  body.large-font textarea {
+    font-size: 1rem;
+  }
+
+  body.large-font h1,
+  body.large-font h2,
+  body.large-font h3,
+  body.large-font h4 {
+    line-height: 1.15;
+  }
+
+  body.high-contrast {
+    background: #000;
+    color: #fff;
+  }
+
+  body.high-contrast .app-shell {
+    background: #000;
+    color: #fff;
+  }
+
+  body.high-contrast .app-shell * {
+    border-color: #fff !important;
+    box-shadow: none !important;
+  }
+
+  body.high-contrast .app-shell .bg-white,
+  body.high-contrast .app-shell .bg-slate-50,
+  body.high-contrast .app-shell .bg-slate-100,
+  body.high-contrast .app-shell .bg-indigo-50,
+  body.high-contrast .app-shell .bg-indigo-600,
+  body.high-contrast .app-shell .bg-slate-900,
+  body.high-contrast .app-shell .bg-emerald-600,
+  body.high-contrast .app-shell .bg-amber-500 {
+    background: #000 !important;
+    color: #fff !important;
+  }
+
+  body.high-contrast .app-shell .text-slate-400,
+  body.high-contrast .app-shell .text-slate-500,
+  body.high-contrast .app-shell .text-indigo-600,
+  body.high-contrast .app-shell .text-indigo-950,
+  body.high-contrast .app-shell .text-slate-900 {
+    color: #fff !important;
+  }
+
+  body.high-contrast .app-shell a,
+  body.high-contrast .app-shell button {
+    color: #ffeb3b !important;
+  }
+
+  body.high-contrast .app-shell input,
+  body.high-contrast .app-shell select,
+  body.high-contrast .app-shell textarea {
+    background: #000 !important;
+    color: #fff !important;
+  }
 }
 
 @layer components {
@@ -49,17 +114,7 @@
   @apply bg-slate-300;
 }
 
-/* Accessibility Feature Overrides */
-html:has(body.large-font) {
-  font-size: 125%;
-}
-
-html:has(body.high-contrast) {
-  filter: invert(1) hue-rotate(180deg) contrast(1.5);
-  background-color: #fff;
-}
-
-html:has(body.high-contrast) img,
-html:has(body.high-contrast) video {
-  filter: invert(1) hue-rotate(180deg);
+body.high-contrast img,
+body.high-contrast video {
+  filter: none;
 }

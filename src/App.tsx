@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bookmark, LayoutGrid, MessageSquare, Scale, LayoutDashboard, Map, User as UserIcon, MapPin, Bell, Settings, Search, Filter, ChevronRight, TrendingUp, Globe, Building2, Users, Zap, CheckCircle, AlertTriangle, ShieldCheck, History, BarChart3, XCircle } from 'lucide-react';
+import { Bookmark, LayoutGrid, MessageSquare, Scale, LayoutDashboard, Map, User as UserIcon, MapPin, Bell, Settings, Search, Filter, ChevronRight, TrendingUp, Globe, Building2, Users, Zap, CheckCircle, AlertTriangle, ShieldCheck, History, BarChart3, XCircle, Languages } from 'lucide-react';
 import LocationSelector from './components/LocationSelector';
 import LawFeed from './components/LawFeed';
 import LawCard from './components/LawCard';
@@ -16,6 +16,7 @@ import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, Ope
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export default function App() {
+  const languageOptions = ['English', 'Spanish', 'Chinese', 'Tagalog', 'Vietnamese', 'Arabic', 'French', 'Korean', 'Russian'];
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -34,7 +35,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics'>('feed');
-  const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'county' | 'city'>('all');
+  const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'local' | 'county' | 'city'>('all');
   const [interestFilter, setInterestFilter] = useState<string>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -245,8 +246,22 @@ export default function App() {
     }));
   };
 
+  const handleOpenNotification = (notification: Notification) => {
+    setNotifications((prev) => prev.map((item) => item.id === notification.id ? { ...item, read: true } : item));
+    if (notification.lawId) {
+      setSelectedLawId(notification.lawId);
+      setActiveTab('feed');
+    }
+    setShowNotifications(false);
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+  };
+
   const filteredLaws = useMemo(() => laws.filter((law) => {
-    const matchesLevel = levelFilter === 'all' || law.level === levelFilter;
+    const matchesLevel = levelFilter === 'all'
+      || (levelFilter === 'local' ? law.level === 'city' || law.level === 'county' : law.level === levelFilter);
     const matchesInterest = interestFilter === 'all' || law.category.toLowerCase().includes(interestFilter.toLowerCase());
     return matchesLevel && matchesInterest;
   }), [laws, levelFilter, interestFilter]);
@@ -264,9 +279,9 @@ export default function App() {
   const collectionLaws = bookmarkCollections.map((collection) => ({ ...collection, laws: laws.filter((law) => collection.lawIds.includes(law.id)) }));
 
   return (
-    <div className={`min-h-screen bg-background-color text-text-primary ${settings.largeFont ? 'text-lg' : 'text-base'}`}>
-      <aside className="fixed left-0 top-0 z-40 h-screen w-72 border-r border-slate-200 bg-white p-8">
-        <div className="mb-12 flex items-center gap-4">
+    <div className={`app-shell min-h-screen bg-background-color text-text-primary transition-colors ${settings.largeFont ? 'text-lg' : 'text-base'} ${settings.highContrast ? 'contrast-mode' : ''}`}>
+      <aside className="fixed left-0 top-0 z-40 flex h-screen w-72 flex-col overflow-y-auto border-r border-slate-200 bg-white p-8">
+        <div className="mb-8 flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white"><Scale size={28} /></div>
           <div>
             <h1 className="text-2xl font-black tracking-tighter text-indigo-950">CIVICLENS</h1>
@@ -289,21 +304,22 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="mt-12 border-t border-slate-100 pt-10">
-          <h3 className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"><Filter size={12} />Quick Filters</h3>
+        <div className="mt-8 border-t border-slate-100 pt-8">
+          <h3 className="mb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"><Filter size={12} />Quick Filters</h3>
           {[
-            ['all', 'All Levels', Globe],
-            ['federal', 'Federal', Building2],
-            ['state', 'State', MapPin],
-            ['county', 'County', LayoutGrid],
-            ['city', 'City', Building2],
+            ['all', `All Levels (${laws.length})`, Globe],
+            ['federal', `Federal (${laws.filter((law) => law.level === 'federal').length})`, Building2],
+            ['state', `State (${laws.filter((law) => law.level === 'state').length})`, MapPin],
+            ['local', `Local (${laws.filter((law) => law.level === 'city' || law.level === 'county').length})`, LayoutGrid],
+            ['county', `County (${laws.filter((law) => law.level === 'county').length})`, LayoutGrid],
+            ['city', `City (${laws.filter((law) => law.level === 'city').length})`, Building2],
           ].map(([id, label, Icon]) => (
             <button key={id} onClick={() => setLevelFilter(id as any)} className={`mb-2 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold ${levelFilter === id ? 'bg-slate-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}>
               <Icon size={14} />{label}
             </button>
           ))}
         </div>
-        <div className="absolute bottom-8 left-8 right-8">
+        <div className="mt-auto pt-8">
           {user ? (
             <div className="flex items-center gap-4 rounded-3xl bg-slate-50 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600/10 font-black text-indigo-600">{user.email?.[0].toUpperCase()}</div>
@@ -325,6 +341,10 @@ export default function App() {
               <MapPin size={16} className="text-indigo-600" />
               <span className="text-xs font-black text-slate-900">{settings.location.city}, {settings.location.state}</span>
             </button>
+            <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-xs font-semibold text-slate-700">
+              <Languages size={16} className="text-indigo-600" />
+              {settings.language}
+            </div>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
               <input type="text" placeholder="Search laws, bills, or topics..." className="h-12 w-80 rounded-2xl bg-slate-100 pl-12 pr-4 text-xs font-bold text-slate-900 outline-none" />
@@ -346,14 +366,28 @@ export default function App() {
             <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute right-12 top-24 z-50 w-96 rounded-[32px] border-2 border-slate-100 bg-white p-6 shadow-2xl shadow-indigo-100">
               <div className="mb-6 flex items-center justify-between">
                 <h3 className="text-sm font-black uppercase tracking-widest text-indigo-950">Notifications</h3>
-                <button onClick={() => setNotifications([])} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">CLEAR ALL</button>
+                <div className="flex items-center gap-3">
+                  <button onClick={handleMarkAllNotificationsRead} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">MARK READ</button>
+                  <button onClick={() => setNotifications([])} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">CLEAR ALL</button>
+                </div>
               </div>
               <div className="space-y-4">
-                {notifications.map((n) => (
-                  <div key={n.id} className={`rounded-2xl p-4 ${n.read ? 'bg-slate-50' : 'bg-indigo-50 ring-1 ring-indigo-100'}`}>
-                    <p className="text-xs font-bold text-slate-900">{n.message}</p>
-                    <p className="mt-1 text-[10px] font-bold text-slate-400">{n.date}</p>
+                {notifications.length === 0 && (
+                  <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                    You are caught up. New bill alerts and status changes will appear here.
                   </div>
+                )}
+                {notifications.map((n) => (
+                  <button key={n.id} onClick={() => handleOpenNotification(n)} className={`block w-full rounded-2xl p-4 text-left transition ${n.read ? 'bg-slate-50' : 'bg-indigo-50 ring-1 ring-indigo-100 hover:bg-indigo-100'}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black text-slate-900">{n.title}</p>
+                        <p className="mt-1 text-xs font-bold text-slate-600">{n.message}</p>
+                      </div>
+                      {!n.read && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-indigo-600" />}
+                    </div>
+                    <p className="mt-2 text-[10px] font-bold text-slate-400">{n.date}</p>
+                  </button>
                 ))}
               </div>
             </motion.div>
@@ -369,8 +403,15 @@ export default function App() {
                   <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-indigo-600"><XCircle size={24} /></button>
                 </div>
                 <div className="space-y-6">
-                  <button onClick={() => setSettings((prev) => ({ ...prev, highContrast: !prev.highContrast }))} className="flex w-full items-center justify-between rounded-2xl bg-slate-50 px-5 py-4 font-black text-slate-700">High Contrast <span>{settings.highContrast ? 'On' : 'Off'}</span></button>
-                  <button onClick={() => setSettings((prev) => ({ ...prev, largeFont: !prev.largeFont }))} className="flex w-full items-center justify-between rounded-2xl bg-slate-50 px-5 py-4 font-black text-slate-700">Large Font <span>{settings.largeFont ? 'On' : 'Off'}</span></button>
+                  <button onClick={() => setSettings((prev) => ({ ...prev, highContrast: !prev.highContrast }))} className={`flex w-full items-center justify-between rounded-2xl px-5 py-4 font-black ${settings.highContrast ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}>High Contrast <span>{settings.highContrast ? 'On' : 'Off'}</span></button>
+                  <button onClick={() => setSettings((prev) => ({ ...prev, largeFont: !prev.largeFont }))} className={`flex w-full items-center justify-between rounded-2xl px-5 py-4 font-black ${settings.largeFont ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}>Large Font <span>{settings.largeFont ? 'On' : 'Off'}</span></button>
+                  <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                    <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-500">Language</label>
+                    <select value={settings.language} onChange={(e) => setSettings((prev) => ({ ...prev, language: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none">
+                      {languageOptions.map((language) => <option key={language} value={language}>{language}</option>)}
+                    </select>
+                    <p className="mt-2 text-xs font-medium text-slate-500">Changing this updates summaries and glossary text across the app where translations are available.</p>
+                  </div>
                 </div>
               </motion.div>
             </div>
@@ -402,6 +443,7 @@ export default function App() {
                   <div>
                     <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Legislative Feed</h2>
                     <p className="mt-2 font-bold text-slate-400">Real-time updates on laws affecting {settings.location.city}.</p>
+                    {settings.language !== 'English' && <p className="mt-2 text-sm font-semibold text-indigo-600">Showing translated summaries in {settings.language}.</p>}
                   </div>
                 </div>
                 <LawFeed laws={feedLaws} allLaws={laws} isLoading={isLoading} error={error} highlightedLawId={selectedLawId} onSave={handleSaveLaw} onVote={handleVote} onComment={handleComment} onPollVote={handlePollVote} onAddImpactStory={handleAddImpactStory} onSaveToCollection={handleSaveToCollection} collections={bookmarkCollections} onCompare={(law) => setLawsToCompare((prev) => prev.find((item) => item.id === law.id) ? prev.filter((item) => item.id !== law.id) : prev.length >= 2 ? [prev[1], law] : [...prev, law])} comparingIds={lawsToCompare.map((law) => law.id)} onToggleFollowTopic={handleToggleFollowTopic} followedTopics={userProfile?.followedTopics || []} />
@@ -449,9 +491,10 @@ export default function App() {
               <motion.div key="profile" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="grid grid-cols-1 gap-12 lg:grid-cols-3">
                 <div className="space-y-12 lg:col-span-2">
                   <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
-                    <h3 className="text-2xl font-black tracking-tight text-indigo-950">Ask About Your Situation</h3>
-                    <textarea className="mt-6 w-full rounded-3xl border-2 border-slate-100 bg-slate-50 p-6 text-sm font-bold text-slate-900 outline-none" rows={4} value={userProfile?.situation || ''} onChange={(e) => setUserProfile((prev) => prev ? { ...prev, situation: e.target.value } : prev)} />
-                    <button onClick={() => handleSaveSituation(userProfile?.situation || '')} className="mt-6 rounded-2xl bg-indigo-600 px-10 py-5 text-sm font-black text-white">UPDATE MY CONTEXT</button>
+                    <h3 className="text-2xl font-black tracking-tight text-indigo-950">Tell CivicLens about your situation</h3>
+                    <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">Add the details you want the app to use when explaining laws. For example: “I’m a renter,” “I’m a college student,” or “I run a small business in San Francisco.”</p>
+                    <textarea placeholder="Example: I am a renter with two school-age children and I rely on public transit." className="mt-6 w-full rounded-3xl border-2 border-slate-100 bg-slate-50 p-6 text-sm font-bold text-slate-900 outline-none" rows={4} value={userProfile?.situation || ''} onChange={(e) => setUserProfile((prev) => prev ? { ...prev, situation: e.target.value } : prev)} />
+                    <button onClick={() => handleSaveSituation(userProfile?.situation || '')} className="mt-6 rounded-2xl bg-indigo-600 px-10 py-5 text-sm font-black text-white">Save my situation</button>
                   </section>
                   <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
                     <h3 className="text-2xl font-black tracking-tight text-indigo-950">Followed Topics</h3>

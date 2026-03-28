@@ -25,6 +25,35 @@ const STATE_CODES: Record<string, string> = {
   "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT", Vermont: "VT", Virginia: "VA", Washington: "WA", "West Virginia": "WV", Wisconsin: "WI", Wyoming: "WY",
 };
 
+const LOCAL_SOURCE_CONFIG: Record<string, Array<{ url: string; level: "city" | "county"; label: string }>> = {
+  "California:San Francisco": [
+    { url: "https://sfbos.org/legislation-introduced-2026", level: "city", label: "SF Board of Supervisors" },
+    { url: "https://sfbos.org/legislation-passed-0", level: "city", label: "SF Board of Supervisors" },
+    { url: "https://sfbos.org/events/calendar/upcoming", level: "city", label: "SF Board calendar" },
+  ],
+  "New York:New York City": [
+    { url: "https://council.nyc.gov/legislation/", level: "city", label: "NYC Council legislation" },
+    { url: "https://council.nyc.gov/calendar/", level: "city", label: "NYC Council calendar" },
+  ],
+  "North Carolina:Raleigh": [
+    { url: "https://raleighnc.gov/city-council", level: "city", label: "Raleigh City Council" },
+    { url: "https://raleighnc.gov/calendar", level: "city", label: "Raleigh calendar" },
+    { url: "https://www.wake.gov/departments-government/board-commissioners", level: "county", label: "Wake County commissioners" },
+  ],
+  "North Carolina:Durham": [
+    { url: "https://www.durhamnc.gov/131/City-Council", level: "city", label: "Durham City Council" },
+    { url: "https://www.dconc.gov/government/departments-f-z/board-of-county-commissioners", level: "county", label: "Durham County commissioners" },
+  ],
+  "Texas:Austin": [
+    { url: "https://www.austintexas.gov/department/city-council/council-meetings", level: "city", label: "Austin City Council" },
+    { url: "https://www.traviscountytx.gov/commissioners-court/agendas", level: "county", label: "Travis County commissioners" },
+  ],
+  "Texas:Houston": [
+    { url: "https://www.houstontx.gov/council/meetings.html", level: "city", label: "Houston City Council" },
+    { url: "https://www.harriscountytx.gov/Government/Departments/Commissioners-Court", level: "county", label: "Harris County commissioners" },
+  ],
+};
+
 function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ").trim();
 }
@@ -39,7 +68,57 @@ function cleanScrapedTitle(value: string) {
 
 function looksLikeLegislation(title: string, href?: string) {
   const haystack = `${title} ${href || ""}`.toLowerCase();
-  return /(ordinance|resolution|hearing|agenda|legislation|committee|budget|appropriation|amend|measure|li\d+|filed|introduced)/.test(haystack);
+  return /(ordinance|resolution|hearing|agenda|legislation|committee|budget|appropriation|amend|measure|li\d+|filed|introduced|council|commissioners|bill|meeting)/.test(haystack);
+}
+
+function isNavigationNoise(title: string, href?: string) {
+  const haystack = `${title} ${href || ""}`.toLowerCase();
+  return /(skip to main content|translate|pay a utility bill|staff|all city council members|mailto:|login|sign in|home|contact us|about us)/.test(haystack);
+}
+
+function absoluteUrl(baseUrl: string, href?: string) {
+  if (!href) return baseUrl;
+  if (href.startsWith("http")) return href;
+  try {
+    return new URL(href, baseUrl).toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
+async function scrapeLegislationSource(source: { url: string; level: "city" | "county"; label: string }, keyPrefix: string) {
+  try {
+    const response = await axios.get(source.url, { timeout: 6000 });
+    const $ = cheerio.load(response.data);
+    const entries: any[] = [];
+
+    $("a").each((i, el) => {
+      const rawTitle = cleanScrapedTitle($(el).text().trim());
+      const href = $(el).attr("href");
+      const title = cleanScrapedTitle(rawTitle.replace(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g, "").trim());
+      const sourceUrl = absoluteUrl(source.url, href);
+
+      if (!title || !hasAlphaTitle(title) || title.length < 8 || isNavigationNoise(title, sourceUrl) || !looksLikeLegislation(title, sourceUrl)) return;
+
+      entries.push({
+        id: `${keyPrefix}-${i}`,
+        title,
+        summary: `Scraped from ${source.label}`,
+        level: source.level,
+        sourceUrl,
+        date: new Date().toLocaleDateString(),
+      });
+    });
+
+    const deduped = entries.filter((entry, index, list) =>
+      list.findIndex((item) => item.title === entry.title || item.sourceUrl === entry.sourceUrl) === index
+    );
+
+    return deduped.slice(0, 4);
+  } catch (error: any) {
+    console.error(`Scraper Error (${source.url}):`, error.message);
+    return [];
+  }
 }
 
 async function generateAiJson<T>(payload: {
@@ -282,6 +361,22 @@ async function startServer() {
     }
   });
 
+  app.get("/api/legislation/federal-register", async (_req, res) => {
+    try {
+      const response = await axios.get("https://www.federalregister.gov/api/v1/documents.json", {
+        params: {
+          per_page: 10,
+          order: "newest",
+        },
+        timeout: 5000,
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      console.error("Federal Register API Error:", error.message);
+      res.json({ results: [] });
+    }
+  });
+
   app.get("/api/legislation/state", async (req, res) => {
     try {
       const apiKey = process.env.OPENSTATES_API_KEY;
@@ -324,34 +419,16 @@ async function startServer() {
   app.get("/api/legislation/scrape", async (req, res) => {
     const { state, city } = req.query;
     try {
-      const results: any[] = [];
+      const sources = LOCAL_SOURCE_CONFIG[`${state}:${city}`] || [];
+      const sourceResults = await Promise.all(
+        sources.map((source, index) => scrapeLegislationSource(source, `${String(city).replace(/\s+/g, "-")}-${index}`))
+      );
+      const results = sourceResults.flat();
+      const deduped = results.filter((entry, index, list) =>
+        list.findIndex((item) => item.title === entry.title || item.sourceUrl === entry.sourceUrl) === index
+      );
 
-      if (city === "San Francisco") {
-        const sfUrl = "https://sfbos.org/legislation-introduced-2026";
-        try {
-          const response = await axios.get(sfUrl, { timeout: 5000 });
-          const $ = cheerio.load(response.data);
-          $(".views-row, .node, .field-content, li").slice(0, 20).each((i, el) => {
-            const rawTitle = cleanScrapedTitle($(el).find("a").first().text().trim() || $(el).text().trim());
-            const link = $(el).find("a").first().attr("href");
-            const title = cleanScrapedTitle(rawTitle.replace(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g, "").trim());
-            if (title && hasAlphaTitle(title) && title.length >= 8 && looksLikeLegislation(title, link)) {
-              results.push({
-                id: `SF-${i}`,
-                title,
-                summary: "Scraped from SF Board of Supervisors",
-                level: "city",
-                sourceUrl: link ? (link.startsWith("http") ? link : `https://sfbos.org${link}`) : sfUrl,
-                date: new Date().toLocaleDateString(),
-              });
-            }
-          });
-        } catch (e) {
-          console.error("SF Scraper Error:", e);
-        }
-      }
-
-      res.json(results.slice(0, 5));
+      res.json(deduped.slice(0, 8));
     } catch (error: any) {
       console.error("Scraper Error:", error.message);
       res.json([]);
