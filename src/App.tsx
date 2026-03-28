@@ -47,6 +47,7 @@ import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, Ope
 import { collection, doc, getDoc, setDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
 
 export default function App() {
+  const LAWS_PER_PAGE = 5;
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -78,6 +79,8 @@ export default function App() {
   const [lawsToCompare, setLawsToCompare] = useState<Law[]>([]);
   const [scrollProgress, setScrollProgress] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [savedPage, setSavedPage] = useState(1);
 
   useEffect(() => {
     // Keydown shortcut
@@ -140,8 +143,9 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
+      const primaryInterest = settings.interests[0] || 'all';
       // 1. Check Cache in Firestore
-      const cacheKey = `${settings.location.state}_${settings.location.city}_${settings.language}`;
+      const cacheKey = `${settings.location.state}_${settings.location.city}_${settings.language}_${primaryInterest}`;
       const cacheRef = doc(db, 'laws_cache', cacheKey);
       let data: Law[] = [];
       const CACHE_LIMIT = 4 * 60 * 60 * 1000; // 4 hours
@@ -169,7 +173,8 @@ export default function App() {
           settings.location.state, 
           settings.location.city, 
           settings.language,
-          userProfile?.situation
+          userProfile?.situation,
+          primaryInterest
         );
         
         // Update Cache
@@ -204,7 +209,7 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [settings.location, settings.language, userProfile?.situation]);
+  }, [settings.location, settings.language, settings.interests, userProfile?.situation]);
 
   useEffect(() => {
     loadLaws();
@@ -357,7 +362,38 @@ export default function App() {
     const matchesInterest = interestFilter === 'all' || law.category.toLowerCase().includes(interestFilter.toLowerCase());
     return matchesLevel && matchesInterest;
   });
+  const primaryInterest = settings.interests[0] || 'all';
+  const prioritizedFilteredLaws = [...filteredLaws].sort((a, b) => {
+    if (primaryInterest === 'all') return 0;
+    const aMatches = a.category.toLowerCase().includes(primaryInterest.toLowerCase()) ? 1 : 0;
+    const bMatches = b.category.toLowerCase().includes(primaryInterest.toLowerCase()) ? 1 : 0;
+    return bMatches - aMatches;
+  });
+  const totalPages = Math.max(1, Math.ceil(prioritizedFilteredLaws.length / LAWS_PER_PAGE));
+  const paginatedLaws = prioritizedFilteredLaws.slice((currentPage - 1) * LAWS_PER_PAGE, currentPage * LAWS_PER_PAGE);
   const savedLaws = laws.filter(l => l.saved);
+  const savedTotalPages = Math.max(1, Math.ceil(savedLaws.length / LAWS_PER_PAGE));
+  const paginatedSavedLaws = savedLaws.slice((savedPage - 1) * LAWS_PER_PAGE, savedPage * LAWS_PER_PAGE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [settings.location, settings.language, settings.interests, interestFilter, levelFilter, laws.length]);
+
+  useEffect(() => {
+    setSavedPage(1);
+  }, [laws.length]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (savedPage > savedTotalPages) {
+      setSavedPage(savedTotalPages);
+    }
+  }, [savedPage, savedTotalPages]);
 
   return (
     <div className={`min-h-screen bg-background-color text-text-primary ${settings.largeFont ? 'text-lg' : 'text-base'}`}>
@@ -720,9 +756,16 @@ export default function App() {
                     <h2 className="text-4xl font-black tracking-tighter text-indigo-950">
                       {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}!
                     </h2>
-                    <p className="mt-2 text-sm font-bold text-slate-400">Here's your real-time feed for {settings.location.city}.</p>
+                    <p className="mt-2 text-sm font-bold text-slate-400">
+                      Here's your real-time feed for {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state}` : settings.location.state}.
+                    </p>
                   </div>
                   <div className="flex gap-3">
+                    {primaryInterest !== 'all' && (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700">
+                        PRIMARY: #{primaryInterest.toUpperCase()}
+                      </div>
+                    )}
                     {['Housing', 'Labor', 'Education'].map(topic => (
                       <button 
                         key={topic}
@@ -736,7 +779,8 @@ export default function App() {
                 </div>
 
                 <LawFeed 
-                  laws={filteredLaws} 
+                  laws={paginatedLaws}
+                  allLaws={prioritizedFilteredLaws}
                   isLoading={isLoading} 
                   error={error} 
                   onSave={handleSaveLaw} 
@@ -747,6 +791,10 @@ export default function App() {
                   comparingIds={lawsToCompare.map(l => l.id)}
                   onToggleFollowTopic={handleToggleFollowTopic}
                   followedTopics={userProfile?.followedTopics}
+                  totalCount={prioritizedFilteredLaws.length}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
                 />
               </motion.div>
             )}
@@ -764,7 +812,8 @@ export default function App() {
                 </div>
                 {savedLaws.length > 0 ? (
                   <LawFeed 
-                    laws={savedLaws} 
+                    laws={paginatedSavedLaws}
+                    allLaws={savedLaws}
                     isLoading={false} 
                     error={null} 
                     onSave={handleSaveLaw} 
@@ -773,6 +822,10 @@ export default function App() {
                     onPollVote={handlePollVote}
                     onCompare={handleCompare}
                     comparingIds={lawsToCompare.map(l => l.id)}
+                    totalCount={savedLaws.length}
+                    currentPage={savedPage}
+                    totalPages={savedTotalPages}
+                    onPageChange={setSavedPage}
                   />
                 ) : (
                   <div className="flex h-96 flex-col items-center justify-center gap-6 rounded-[40px] border-4 border-dashed border-slate-100 bg-white text-slate-400">

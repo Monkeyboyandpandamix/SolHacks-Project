@@ -336,8 +336,7 @@ async function postAi<T>(url: string, payload: unknown): Promise<T | null> {
   }
 }
 
-export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string): Promise<Law[]> {
-  const stateCode = stateCodes[state] || state;
+export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string, primaryInterest: string = "all"): Promise<Law[]> {
 
   const rawData: any = { federal: null, federalRegister: null, state: null, documents: null, scraped: null };
 
@@ -345,9 +344,9 @@ export async function fetchLaws(state: string, city: string, language: string = 
     const [fedRes, federalRegisterRes, stateRes, docRes, scrapeRes] = await Promise.allSettled([
       axios.get("/api/legislation/federal"),
       axios.get("/api/legislation/federal-register"),
-      axios.get(`/api/legislation/state?state=${stateCode}`),
+      axios.get(`/api/legislation/state?state=${encodeURIComponent(state)}`),
       axios.get("/api/legislation/documents"),
-      axios.get(`/api/legislation/scrape?state=${state}&city=${city}`),
+      axios.get(`/api/legislation/scrape?state=${encodeURIComponent(state)}&city=${encodeURIComponent(city)}`),
     ]);
 
     if (fedRes.status === "fulfilled") rawData.federal = fedRes.value.data;
@@ -360,9 +359,15 @@ export async function fetchLaws(state: string, city: string, language: string = 
   }
 
   const fallback = enrichLaws(fallbackFromRawData(rawData, state, city), state, city);
-  const aiResponse = await postAi<{ laws?: Law[] }>("/api/ai/laws", { state, city, userSituation, rawData });
+  const aiResponse = await postAi<{ laws?: Law[] }>("/api/ai/laws", { state, city, userSituation, primaryInterest, rawData });
   const aiLaws = Array.isArray(aiResponse?.laws) && aiResponse.laws.length > 0 ? enrichLaws(aiResponse.laws, state, city) : fallback;
-  return applyTranslationToLaws(aiLaws, language);
+  const prioritized = [...aiLaws].sort((a, b) => {
+    if (primaryInterest === "all") return 0;
+    const aMatches = a.category.toLowerCase().includes(primaryInterest.toLowerCase()) ? 1 : 0;
+    const bMatches = b.category.toLowerCase().includes(primaryInterest.toLowerCase()) ? 1 : 0;
+    return bMatches - aMatches;
+  });
+  return applyTranslationToLaws(prioritized, language);
 }
 
 export async function generateAdvocacyLetter(law: Law, stance: "support" | "oppose", userSituation?: string): Promise<string> {
