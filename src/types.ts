@@ -142,8 +142,7 @@ export interface Notification {
 
 export interface UserSettings {
   highContrast: boolean;
-  fontSize: 'small' | 'medium' | 'large';
-  reduceMotion?: boolean;
+  fontSize: 'extra-small' | 'small' | 'medium' | 'large' | 'extra-large';
   underlineLinks?: boolean;
   language: string;
   location: {

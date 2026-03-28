@@ -50,12 +50,20 @@
 }
 
 /* Accessibility Feature Overrides */
+html:has(body.font-size-extra-small) {
+  font-size: 75%;
+}
+
 html:has(body.font-size-small) {
   font-size: 85%;
 }
 
 html:has(body.font-size-large) {
-  font-size: 135%;
+  font-size: 115%;
+}
+
+html:has(body.font-size-extra-large) {
+  font-size: 130%;
 }
 
 html:has(body.high-contrast) {
@@ -68,14 +76,7 @@ html:has(body.high-contrast) video {
   filter: invert(1) hue-rotate(180deg);
 }
 
-html:has(body.reduce-motion) *,
-html:has(body.reduce-motion) *::before,
-html:has(body.reduce-motion) *::after {
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.01ms !important;
-  scroll-behavior: auto !important;
-}
+
 
 html:has(body.underline-links) a,
 html:has(body.underline-links) button {

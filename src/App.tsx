@@ -41,6 +41,7 @@ import RoadmapView from './components/RoadmapView';
 import AnalyticsView from './components/AnalyticsView';
 import RepresentativeCard from './components/RepresentativeCard';
 import AILawyer from './components/AILawyer';
+import AskAIFloatingButton from './components/AskAIFloatingButton';
 import CommunityView from './components/CommunityView';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
 import { fetchLaws, mergeCanonicalLaws } from './services/geminiService';
@@ -79,7 +80,6 @@ export default function App() {
     return saved ? JSON.parse(saved) : {
       highContrast: false,
       fontSize: 'medium',
-      reduceMotion: false,
       underlineLinks: false,
       language: "English",
       location: {
@@ -304,7 +304,8 @@ export default function App() {
     document.body.classList.toggle('high-contrast', settings.highContrast);
     document.body.classList.toggle('font-size-small', settings.fontSize === 'small');
     document.body.classList.toggle('font-size-large', settings.fontSize === 'large');
-    document.body.classList.toggle('reduce-motion', !!settings.reduceMotion);
+    document.body.classList.toggle('font-size-extra-small', settings.fontSize === 'extra-small');
+    document.body.classList.toggle('font-size-extra-large', settings.fontSize === 'extra-large');
     document.body.classList.toggle('underline-links', !!settings.underlineLinks);
   }, [settings]);
 
@@ -699,29 +700,27 @@ export default function App() {
                       <p className="text-xs font-bold text-slate-400">Adjust the font size for better readability.</p>
                     </div>
                     <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">
-                      {(['small', 'medium', 'large'] as const).map((size) => (
-                        <button
-                          key={size}
-                          onClick={() => handleUpdateSettings({ fontSize: size })}
-                          className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all ${settings.fontSize === size ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-600'}`}
-                        >
-                          {size}
-                        </button>
-                      ))}
+                      {(['extra-small', 'small', 'medium', 'large', 'extra-large'] as const).map((size) => {
+                        const labelMap: Record<string, string> = {
+                          'extra-small': 'xs',
+                          'small': 'sm',
+                          'medium': 'md',
+                          'large': 'lg',
+                          'extra-large': 'xl'
+                        };
+                        return (
+                          <button
+                            key={size}
+                            onClick={() => handleUpdateSettings({ fontSize: size })}
+                            className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all ${settings.fontSize === size ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-600'}`}
+                          >
+                            {labelMap[size]}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-black text-indigo-950">Reduce Motion</p>
-                      <p className="text-xs font-bold text-slate-400">Minimize animations and transitions.</p>
-                    </div>
-                    <button 
-                      onClick={() => handleUpdateSettings({ reduceMotion: !settings.reduceMotion })}
-                      className={`h-8 w-14 rounded-full transition-all ${settings.reduceMotion ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                    >
-                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.reduceMotion ? 'ml-7' : 'ml-1'}`} />
-                    </button>
-                  </div>
+
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-black text-indigo-950">Underline Links</p>
@@ -754,7 +753,7 @@ export default function App() {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.5 }}
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className="fixed bottom-10 right-10 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-200 transition-transform active:scale-95"
+                className="fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-200 transition-transform active:scale-95"
               >
                 <ChevronUp size={24} />
               </motion.button>
@@ -1195,6 +1194,7 @@ export default function App() {
         </footer>
       </main>
 
+      <AskAIFloatingButton />
       <AILawyer laws={laws} userSituation={userProfile?.situation} />
 
       {lawsToCompare.length === 2 && (
