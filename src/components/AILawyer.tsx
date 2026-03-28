@@ -22,6 +22,15 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
 
+  useEffect(() => {
+    const handleAskAI = (e: CustomEvent) => {
+      setInput(`Can you explain this text: "${e.detail}"`);
+      setIsOpen(true);
+    };
+    window.addEventListener('ask-ai', handleAskAI as EventListener);
+    return () => window.removeEventListener('ask-ai', handleAskAI as EventListener);
+  }, []);
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
     const userMessage = input.trim();
