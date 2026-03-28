@@ -126,7 +126,7 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
     });
   }, [laws, scopeFilter, selectedState]);
 
-  const maxStateCount = Math.max(...Object.values(stateTotals), 1);
+  const maxStateCount = Math.max(...(Object.values(stateTotals) as number[]), 1);
   const federalCount = laws.filter((law) => law.level === 'federal').length;
 
   const mapStates = useMemo(() => {
