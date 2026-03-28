@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - situation: string (optional)
+    //   - location: map (required)
+    //   - interests: list (optional)
+    //   - followedTopics: list (optional)
+    //   - lastUpdated: string (required)
+    //
+    // Collection: laws
+    // Document ID: {lawId}
+    // Fields:
+    //   - id: string (required)
+    //   - title: string (required)
+    //   - simplifiedSummary: string (required)
+    //   - impact: string (required)
+    //   - category: string (required)
+    //   - level: string (required)
+    //   - status: string (required)
+    //   - date: string (required)
+    //   - lastUpdated: string (required)
+    //
+    // Subcollection: laws/{lawId}/comments
+    // Document ID: {commentId}
+    // Fields:
+    //   - id: string (required)
+    //   - userId: string (required)
+    //   - userName: string (required)
+    //   - text: string (required)
+    //   - date: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "mo10141014@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'location', 'lastUpdated']) &&
+             data.uid is string && data.email is string &&
+             data.location is map && data.lastUpdated is string;
+    }
+
+    function isValidLaw(data) {
+      return data.keys().hasAll(['id', 'title', 'simplifiedSummary', 'impact', 'category', 'level', 'status', 'date', 'lastUpdated']) &&
+             data.id is string && data.title is string && data.simplifiedSummary is string &&
+             data.impact is string && data.category is string && data.level in ['federal', 'state', 'county', 'city'] &&
+             data.status in ['proposed', 'passed', 'rejected', 'updated'] && data.date is string && data.lastUpdated is string;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['id', 'userId', 'userName', 'text', 'date']) &&
+             data.id is string && data.userId == request.auth.uid &&
+             data.userName is string && data.text is string && data.text.size() < 1000 &&
+             data.date is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /laws_cache/{cacheId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user');
+      allow update: if isOwner(uid) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /laws/{lawId} {
+      allow read: if true; // Publicly readable laws
+      allow write: if isAdmin(); // Only admins/system can cache laws
+      
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && isValidComment(request.resource.data);
+        allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      }
+    }
+  }
+}

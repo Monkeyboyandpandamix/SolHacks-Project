@@ -1,0 +1,7 @@
+{
+  "name": "CivicLens",
+  "description": "An AI-powered civic engagement platform that simplifies laws and helps communities stay informed about legislation.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
