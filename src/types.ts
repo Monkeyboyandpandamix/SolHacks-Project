@@ -1,7 +1,7 @@
 export interface UserProfile {
   uid: string;
   email: string;
-  situation?: string;
+  situation?: string; // e.g., "I'm an international student working part-time"
   location: {
     state: string;
     city: string;
@@ -24,66 +24,12 @@ export interface Comment {
   userName: string;
   text: string;
   date: string;
-  status?: 'published' | 'flagged';
-  moderationNote?: string;
 }
 
 export interface Poll {
   question: string;
   options: { label: string; count: number }[];
   userChoice?: string;
-}
-
-export interface GlossaryItem {
-  term: string;
-  definition: string;
-}
-
-export interface ConflictAnalysis {
-  summary: string;
-  risk: 'low' | 'medium' | 'high';
-  overlaps: string[];
-}
-
-export interface HearingEvent {
-  id: string;
-  title: string;
-  date: string;
-  venue: string;
-  type: 'hearing' | 'town-hall' | 'committee';
-  registrationUrl?: string;
-}
-
-export interface AdvocacyGroup {
-  id: string;
-  name: string;
-  mission: string;
-  website?: string;
-}
-
-export interface ImpactStory {
-  id: string;
-  author: string;
-  text: string;
-  date: string;
-  verified: boolean;
-}
-
-export interface BookmarkCollection {
-  id: string;
-  name: string;
-  lawIds: string[];
-}
-
-export interface RepresentativeChannel {
-  type: string;
-  id: string;
-}
-
-export interface RepresentativeVoteRecord {
-  billTitle: string;
-  stance: 'support' | 'oppose' | 'watching';
-  note: string;
 }
 
 export interface Law {
@@ -110,36 +56,24 @@ export interface Law {
   poll?: Poll;
   sourceUrl?: string;
   timeline?: LawTimeline[];
-  glossary?: GlossaryItem[];
+  glossary?: { term: string; definition: string }[];
   personalImpact?: string;
-  lastUpdated?: string;
-  conflictAnalysis?: ConflictAnalysis;
-  hearings?: HearingEvent[];
-  advocacyGroups?: AdvocacyGroup[];
-  impactStories?: ImpactStory[];
-  relatedLawIds?: string[];
-  velocityScore?: number;
+  lastUpdated?: string; // For caching logic
 }
 
 export interface Representative {
   id: string;
   name: string;
-  role?: string;
-  office?: string;
+  role: string;
   party: string;
   photoUrl?: string;
-  contact?: {
+  contact: {
     email?: string;
     phone?: string;
     website?: string;
     twitter?: string;
   };
-  emails?: string[];
-  phones?: string[];
-  urls?: string[];
-  channels?: RepresentativeChannel[];
-  sponsoredBills?: string[];
-  votingRecord?: RepresentativeVoteRecord[];
+  sponsoredBills: string[]; // IDs of bills
 }
 
 export interface Notification {
@@ -148,13 +82,15 @@ export interface Notification {
   message: string;
   date: string;
   read: boolean;
-  type: 'new' | 'update' | 'status_change' | 'alert' | 'moderation';
+  type: 'new' | 'update' | 'status_change';
   lawId?: string;
 }
 
 export interface UserSettings {
   highContrast: boolean;
   largeFont: boolean;
+  reduceMotion?: boolean;
+  underlineLinks?: boolean;
   language: string;
   location: {
     state: string;
