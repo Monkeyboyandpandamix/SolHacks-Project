@@ -9,13 +9,14 @@ interface LocationSelectorProps {
   initialState: string;
   initialCity: string;
   initialLanguage: string;
+  initialInterest?: string;
 }
 
-const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, onInterestChange, initialState, initialCity, initialLanguage }) => {
+const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, onInterestChange, initialState, initialCity, initialLanguage, initialInterest = 'all' }) => {
   const [state, setState] = useState(initialState);
   const [city, setCity] = useState(initialCity);
   const [language, setLanguage] = useState(initialLanguage);
-  const [interest, setInterest] = useState('all');
+  const [interest, setInterest] = useState(initialInterest);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -89,6 +90,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
     { id: 'English', label: 'English' },
     { id: 'Spanish', label: 'Español' },
     { id: 'Chinese', label: '中文' },
+    { id: 'Myanmar', label: 'မြန်မာ' },
     { id: 'Tagalog', label: 'Tagalog' },
     { id: 'Vietnamese', label: 'Tiếng Việt' },
     { id: 'Arabic', label: 'العربية' },
