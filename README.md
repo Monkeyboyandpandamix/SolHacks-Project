@@ -1,160 +1,224 @@
 # CivicLens
 
-CivicLens is a democracy-focused application that helps users stay informed about local and national legislation. It uses AI to simplify legal jargon and provides a personalized feed based on user location and interests.
+CivicLens is a location-aware legislative discovery app that combines live government data, Firebase-backed persistence, and Gemini-powered summarization. It helps users browse federal, state, county, and city legislation, understand what it means in plain language, compare laws, and use community features tied to their location.
 
-## Features
+## Current Scope
 
-- **Personalized Legislative Feed:** Real-time updates on laws affecting your specific location.
-- **AI-Powered Insights:** Simplifies complex legal text using Gemini AI.
-- **Location-Based Filtering:** Easily change your location with city/county autofill suggestions.
-- **Follow Topics:** Subscribe to specific legislative categories like Housing, Education, and Labor.
-- **Comparison Tool:** Select and compare two laws side-by-side.
-- **Representative Information:** Find and contact your elected officials.
-- **Interactive Map:** Visualize legislation across different regions.
+- Real legislative feed based on selected `state`, `city`, and `language`
+- Federal data from Congress.gov, Federal Register, and GovInfo
+- State data from OpenStates
+- Local/county data from configured public source scrapers
+- Firebase Auth, Firestore caching, and community chat
+- Community tab with events, neighborhood chat, translators, shelters, legal help, and immigration resources
+- Analytics, map, saved laws, roadmap, digest, and AI assistant views
 
-## :large_blue_diamond: Additional Feature Recommendations
+## Key Behaviors
 
-| Feature | Description |
-|---|---|
-| **Plain Language Summarizer** | AI condenses dense legal text into a 3-sentence plain English summary per law |
-| **"How Does This Affect Me?" Engine** | User fills a profile (homeowner, student, small business owner, parent, etc.) — AI personalizes impact analysis |
-| **Side-by-Side Law Comparator** | Compare how the same issue is legislated across different states |
-| **Conflict Detector** | AI flags when a state law potentially conflicts with a federal law |
-| **Legal Jargon Glossary** | Inline definitions when hovering over complex legal terms |
->>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
-=======
-### 1. AI-Enhanced Comprehension Features
-| Feature | Description | Status |
-|---|---|---|
-| **Plain Language Summarizer** | AI condenses dense legal text into a 3-sentence plain English summary per law | Planned |
-| **"How Does This Affect Me?" Engine** | User fills a profile (homeowner, student, small business owner, parent, etc.) to get personalized impact analysis | Planned |
-| **Side-by-Side Law Comparator** | Compare how the same issue is legislated across different states | In Progress |
-| **Conflict Detector** | AI flags when a state law potentially conflicts with a federal law | Planned |
-| **Legal Jargon Glossary** | Inline definitions when hovering over complex legal terms | Planned |
-=======
-| Feature | Description |
-|---|---|
-| **Plain Language Summarizer** | AI condenses dense legal text into a 3-sentence plain English summary per law |
-| **"How Does This Affect Me?" Engine** | User fills a profile (homeowner, student, small business owner, parent, etc.) — AI personalizes impact analysis |
-| **Side-by-Side Law Comparator** | Compare how the same issue is legislated across different states |
-| **Conflict Detector** | AI flags when a state law potentially conflicts with a federal law |
-| **Legal Jargon Glossary** | Inline definitions when hovering over complex legal terms |
->>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
+### Real, Source-Backed Feed
 
----
+- The feed is now filtered to source-backed laws only.
+- Synthetic “coverage” placeholder laws were removed.
+- Every law must have a public `sourceUrl` to survive normalization and deduplication.
+- Congress API URLs are normalized to public Congress webpages before rendering or caching.
 
-| Feature | Description |
-|---|---|
-| **AI Letter/Email Generator** | Drafts a personalized advocacy letter to the user's elected representative based on selected law + user's stance |
-=======
-| Feature | Description |
-|---|---|
-| **AI Letter/Email Generator** | Drafts a personalized advocacy letter to the user's elected representative based on selected law + user's stance |
-| **Representative Finder** | Auto-populates elected officials (federal, state, local) based on user ZIP code via Google Civic API |
-| **Voting Record Integration** | Shows how representatives voted on similar past bills — pulls from ProPublica Congress API |
-| **Legislative Status Tracker** | Visual bill progress bar: Introduced → Committee → Floor Vote → Signed/Vetoed |
-| **Hearing Calendar** | Upcoming public hearings where citizens can testify — with registration links |
->>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
+### Correct Jurisdiction Labels
 
----
+- Laws are classified as `Federal`, `State`, `County`, or `City` using source URL and identifier patterns.
+- OpenStates bills are labeled as `State`.
+- Congress.gov, Federal Register, and GovInfo items are labeled as `Federal`.
 
-### 3. Community & Collaboration Features
-<<<<<<< HEAD
-| Feature | Description | Status |
-|---|---|---|
-| **Community Commentary** | Per-law threaded discussion board moderated by AI for civility | Planned |
-| **Advocacy Groups Directory** | Organizations working on the same law so users can connect directly | Planned |
-| **Collective Bookmarks** | Groups and coalitions can share curated law lists | Planned |
-| **Crowd-sourced Impact Stories** | Citizens submit how a law affected them personally in a verified, anonymized format | Planned |
-=======
-| Feature | Description |
-|---|---|
-| **Community Commentary** | Per-law threaded discussion board (moderated by AI for civility) |
-| **Advocacy Groups Directory** | Orgs working on the same law — users can connect |
-| **Collective Bookmarks** | Groups/coalitions can share curated law lists |
-| **Crowd-sourced Impact Stories** | Citizens submit how a law affected them personally (verified, anonymized) |
->>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
+### Canonical Law Deduplication
 
----
+- Duplicate laws are merged into a single canonical record.
+- Dedupe prioritizes:
+  - source URL
+  - stable bill identifiers
+  - normalized title/date/level fallback
+- This prevents the same bill from being recreated as multiple AI variants across different interests.
 
-### 4. Intelligence & Discovery Features
-<<<<<<< HEAD
-| Feature | Description | Status |
-|---|---|---|
-| **Smart Alerts** | Notify users when bookmarked bills change status or new laws match their interest tags | Planned |
-| **Trending Laws Dashboard** | Show what is being discussed most in the user's state this week | Planned |
-| **"Related Laws" Recommendation** | Collaborative and content-based filtering for laws with similar issues and effects | Planned |
-| **Multi-language Support** | AI translation in Spanish, Mandarin, and other languages for accessibility | Planned |
-| **Audio Summaries** | Text-to-speech summaries for visually impaired or low-literacy users | Planned |
-=======
-| Feature | Description |
-|---|---|
-| **Smart Alerts** | Notify users when bookmarked bills change status or new laws match their interest tags |
-| **Trending Laws Dashboard** | What's being discussed most in your state this week |
-| **"Related Laws" Recommendation** | Collaborative + content-based filtering ("Laws similar to this") |
-| **Multi-language Support** | AI translation (Spanish, Mandarin, etc.) for accessibility |
-| **Audio Summaries** | TTS (Text-to-Speech) for visually impaired or low-literacy users |
->>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
+### Firestore-Backed Cache
 
----
+- Firestore is the source of truth for cached laws per `state/city/language`.
+- The app stores canonical location caches under `v4_<state>_<city>_<language>`.
+- Legacy `v2_` and `v3_` cache docs are migrated into `v4_` and stale duplicates are deleted.
+- New fetches merge only genuinely new laws into the stored dataset instead of replacing everything.
 
-### 5. Analytics & Transparency (for Orgs & Power Users)
-<<<<<<< HEAD
-| Feature | Description | Status |
-|---|---|---|
-| **Advocacy Campaign Dashboard** | Track petition signatures, letters sent, and views per law | Planned |
-| **Sentiment Heatmap** | Geographic view of public sentiment on a law across counties | Planned |
-| **Legislation Velocity Score** | AI predicts likelihood of a bill passing based on historical patterns | Planned |
-=======
-| Feature | Description |
-|---|---|
-| **Advocacy Campaign Dashboard** | Track petition signatures, letters sent, views per law |
-| **Sentiment Heatmap** | Geographic view of public sentiment on a law across counties |
-| **Legislation Velocity Score** | AI predicts likelihood of a bill passing based on historical patterns |
->>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
+### State Feed Resilience
 
----
+- OpenStates responses are cached server-side for 6 hours per state.
+- OpenStates `429` responses trigger a cooldown/backoff window.
+- If rate-limited, the server returns cached state results when available.
+- The app surfaces a notification when state data is temporarily rate-limited.
 
-## Getting Started
+## Community Features
 
-### Prerequisites
+### Community Tab
 
-- Node.js (v18 or higher)
-- npm
+- Community Events
+- Neighborhood Chat
+- Nearby translators
+- Nearby shelters
+- Nearby lawyers and legal aid
+- Immigration support resources
 
-### Installation
+### Neighborhood Chat
 
-1. Clone the repository.
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+- Backed by Firestore under `community_rooms/{roomId}/messages`
+- Scoped per location
+- Requires sign-in to post
+- Publicly readable
 
-### Configuration
+## Firebase
 
-1. Create a `.env` file in the root directory based on `.env.example`.
-2. Add your API keys:
-   - `GEMINI_API_KEY`: Required for AI insights and location suggestions.
-   - `CONGRESS_GOV_API_KEY`: Required for federal legislation data.
-   - `OPENSTATES_API_KEY`: Required for state legislation data.
-   - `GOVINFO_API_KEY`: Required for government documents.
+### Active Firebase Project
 
-### Running the App
+This repo is configured to use:
 
-To start the development server (both frontend and backend):
+- `solhack-7d8a0`
+
+Config file:
+
+- [firebase-applet-config.json](./firebase-applet-config.json)
+
+Firebase bootstrap:
+
+- [src/firebase.ts](./src/firebase.ts)
+
+### Firestore Rules
+
+Rules file:
+
+- [firestore.rules](./firestore.rules)
+
+Firebase deploy config:
+
+- [firebase.json](./firebase.json)
+
+Rules currently cover:
+
+- `users/{uid}`
+- `laws_cache/{cacheId}`
+- `laws/{lawId}/comments/{commentId}`
+- `community_rooms/{roomId}/messages/{messageId}`
+
+## Data Sources
+
+### Federal
+
+- Congress.gov API
+- Federal Register API
+- GovInfo API
+
+### State
+
+- OpenStates API
+
+### Local / County
+
+- Scraped public legislative and council pages for configured cities/counties
+
+### AI
+
+- Gemini API for:
+  - plain-language summaries
+  - comparisons
+  - conflict checks
+  - translation
+  - advocacy letters
+  - chat assistant
+  - community event/resource search fallback
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and provide the needed values.
+
+Required or strongly recommended:
+
+- `GEMINI_API_KEY`
+- `CONGRESS_GOV_API_KEY`
+- `OPENSTATES_API_KEY`
+- `GOVINFO_API_KEY`
+
+Optional:
+
+- `GOOGLE_CIVIC_API_KEY`
+- `PROPUBLICA_API_KEY`
+- `MEETUP_API_KEY`
+- `APP_URL`
+
+See:
+
+- [`.env.example`](./.env.example)
+
+## Installation
+
+```bash
+npm install
+```
+
+## Development
+
+Start the combined frontend/backend server:
+
 ```bash
 npm run dev
 ```
 
-The app will be available at `http://localhost:3000`.
+The app runs at:
+
+- `http://localhost:3000`
+
+## Build
+
+```bash
+npm run build
+```
+
+## Deploy Firestore Rules
+
+```bash
+firebase deploy --only firestore:rules --project solhack-7d8a0
+```
+
+## Operational Notes
+
+### OpenStates Limits
+
+- OpenStates enforces request-rate limits.
+- The app now mitigates this with state-level cache reuse and cooldown handling.
+- Rapidly switching through many states can still trigger temporary throttling.
+
+### Cache Refresh
+
+- If old cached data is still visible, refresh the relevant location feed so the `v4_` cache path rewrites it.
+- Old bad Congress API links may remain only in stale cache docs created before URL normalization.
+
+### Auth Requirements
+
+Google Authentication must be enabled in Firebase Console, and `localhost` must be in Authorized Domains for local sign-in to work.
+
+## Main Files
+
+- [src/App.tsx](./src/App.tsx)
+- [src/firebase.ts](./src/firebase.ts)
+- [src/services/geminiService.ts](./src/services/geminiService.ts)
+- [src/services/communityService.ts](./src/services/communityService.ts)
+- [src/components/LawCard.tsx](./src/components/LawCard.tsx)
+- [src/components/LawFeed.tsx](./src/components/LawFeed.tsx)
+- [src/components/CommunityView.tsx](./src/components/CommunityView.tsx)
+- [server.ts](./server.ts)
+- [firestore.rules](./firestore.rules)
 
 ## Tech Stack
 
-- **Frontend:** React, Vite, Tailwind CSS, Lucide React, Motion.
-- **Backend:** Express, Node.js, Axios, Cheerio (for web scraping).
-- **Database/Auth:** Firebase (Firestore & Authentication).
-- **AI:** Google Gemini API.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+- React 19
+- Vite
+- TypeScript
+- Express
+- Firebase Auth
+- Firestore
+- Axios
+- Motion
+- Lucide React
+- Recharts
+- Gemini
