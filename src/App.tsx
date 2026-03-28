@@ -54,7 +54,7 @@ export default function App() {
     const saved = localStorage.getItem('civiclens_settings');
     return saved ? JSON.parse(saved) : {
       highContrast: false,
-      largeFont: false,
+      fontSize: 'medium',
       reduceMotion: false,
       underlineLinks: false,
       language: "English",
@@ -69,7 +69,7 @@ export default function App() {
   const [laws, setLaws] = useState<Law[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics' | 'resources'>('feed');
   const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'county' | 'city'>('all');
   const [interestFilter, setInterestFilter] = useState<string>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -220,6 +220,8 @@ export default function App() {
     
     // Apply accessibility classes to body
     document.body.classList.toggle('high-contrast', settings.highContrast);
+    document.body.classList.toggle('font-size-small', settings.fontSize === 'small');
+    document.body.classList.toggle('font-size-large', settings.fontSize === 'large');
     document.body.classList.toggle('reduce-motion', !!settings.reduceMotion);
     document.body.classList.toggle('underline-links', !!settings.underlineLinks);
   }, [settings]);
@@ -396,7 +398,7 @@ export default function App() {
   }, [savedPage, savedTotalPages]);
 
   return (
-    <div className={`min-h-screen bg-background-color text-text-primary ${settings.largeFont ? 'text-lg' : 'text-base'}`}>
+    <div className={`min-h-screen bg-background-color text-text-primary text-base`}>
       {/* Scroll Progress Bar */}
       <motion.div 
         className="fixed top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 z-50 origin-left"
@@ -424,6 +426,7 @@ export default function App() {
             { id: 'profile', icon: UserIcon, label: 'MY PROFILE' },
             { id: 'roadmap', icon: History, label: 'ROADMAP' },
             { id: 'analytics', icon: BarChart3, label: 'ANALYTICS' },
+            { id: 'resources', icon: Bookmark, label: 'RESOURCES' },
           ].map(tab => (
             <button 
               key={tab.id}
@@ -610,15 +613,20 @@ export default function App() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-black text-indigo-950">Large Font</p>
-                      <p className="text-xs font-bold text-slate-400">Increase text size across the app.</p>
+                      <p className="text-sm font-black text-indigo-950">Text Size</p>
+                      <p className="text-xs font-bold text-slate-400">Adjust the font size for better readability.</p>
                     </div>
-                    <button 
-                      onClick={() => handleUpdateSettings({ largeFont: !settings.largeFont })}
-                      className={`h-8 w-14 rounded-full transition-all ${settings.largeFont ? 'bg-indigo-600' : 'bg-slate-200'}`}
-                    >
-                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.largeFont ? 'ml-7' : 'ml-1'}`} />
-                    </button>
+                    <div className="flex items-center gap-1 rounded-full bg-slate-100 p-1">
+                      {(['small', 'medium', 'large'] as const).map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => handleUpdateSettings({ fontSize: size })}
+                          className={`rounded-full px-4 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all ${settings.fontSize === size ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-indigo-600'}`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
@@ -1034,7 +1042,51 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
               >
-                <AnalyticsView />
+                <AnalyticsView laws={laws} collections={[]} />
+              </motion.div>
+            )}
+
+            {activeTab === 'resources' && (
+              <motion.div 
+                key="resources"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <div className="space-y-10">
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Resources</h2>
+                      <p className="mt-2 font-bold text-slate-400">Helpful links and documentation to navigate civic life.</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+                    <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/50">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                        <Bookmark size={24} />
+                      </div>
+                      <h3 className="text-xl font-black text-indigo-950">Voter Registration</h3>
+                      <p className="mt-2 text-sm font-bold text-slate-500">Check your registration status or register to vote in your state.</p>
+                      <button className="mt-6 font-black text-indigo-600 hover:underline">Access Portal →</button>
+                    </div>
+                    <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/50">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                        <Info size={24} />
+                      </div>
+                      <h3 className="text-xl font-black text-indigo-950">Legal Aid Clinics</h3>
+                      <p className="mt-2 text-sm font-bold text-slate-500">Find free or low-cost legal assistance programs near you.</p>
+                      <button className="mt-6 font-black text-emerald-600 hover:underline">Find Clinics →</button>
+                    </div>
+                    <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/50">
+                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                        <MessageSquare size={24} />
+                      </div>
+                      <h3 className="text-xl font-black text-indigo-950">Town Hall Schedules</h3>
+                      <p className="mt-2 text-sm font-bold text-slate-500">Upcoming public meetings and town halls with your representatives.</p>
+                      <button className="mt-6 font-black text-amber-600 hover:underline">View Calendar →</button>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             )}
 

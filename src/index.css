@@ -50,8 +50,12 @@
 }
 
 /* Accessibility Feature Overrides */
-html:has(body.large-font) {
-  font-size: 125%;
+html:has(body.font-size-small) {
+  font-size: 85%;
+}
+
+html:has(body.font-size-large) {
+  font-size: 135%;
 }
 
 html:has(body.high-contrast) {
