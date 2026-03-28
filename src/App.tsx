@@ -407,6 +407,14 @@ export default function App() {
     }));
   };
 
+  const handlePrimaryInterestChange = (interest: string) => {
+    setInterestFilter(interest);
+    setSettings((prev) => ({
+      ...prev,
+      interests: interest === 'all' ? [] : [interest],
+    }));
+  };
+
   const handleSaveLaw = (id: string) => {
     setLaws(prev => {
       const updated = prev.map(law => 
@@ -837,11 +845,12 @@ export default function App() {
                   initialState={settings.location.state}
                   initialCity={settings.location.city}
                   initialLanguage={settings.language}
+                  initialInterest={settings.interests[0] || 'all'}
                   onLocationChange={(state, city, language) => {
                     handleLocationChange(state, city, language);
                     setShowLocationSelector(false);
                   }}
-                  onInterestChange={(interest) => setInterestFilter(interest)}
+                  onInterestChange={handlePrimaryInterestChange}
                 />
               </motion.div>
             )}
