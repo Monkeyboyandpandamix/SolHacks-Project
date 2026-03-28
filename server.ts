@@ -6,9 +6,12 @@ import dotenv from "dotenv";
 import * as cheerio from "cheerio";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 
+dotenv.config({ path: ".env.local" });
 dotenv.config();
 
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
+const stateLegislationCache = new Map<string, { data: any; timestamp: number }>();
+const STATE_CACHE_TTL = 30 * 60 * 1000;
 
 const CITY_DIRECTORY: Record<string, string[]> = {
   California: ["San Francisco", "San Diego", "San Jose", "Sacramento", "Oakland", "Los Angeles"],
@@ -114,7 +117,7 @@ async function scrapeLegislationSource(source: { url: string; level: "city" | "c
       list.findIndex((item) => item.title === entry.title || item.sourceUrl === entry.sourceUrl) === index
     );
 
-    return deduped.slice(0, 4);
+    return deduped;
   } catch (error: any) {
     console.error(`Scraper Error (${source.url}):`, error.message);
     return [];
@@ -351,8 +354,8 @@ async function startServer() {
       if (!apiKey) return res.status(500).json({ error: "CONGRESS_GOV_API_KEY not configured" });
 
       const response = await axios.get("https://api.congress.gov/v3/bill", {
-        params: { api_key: apiKey, format: "json", limit: 10, sort: "updateDate+desc" },
-        timeout: 5000,
+        params: { api_key: apiKey, format: "json", limit: 50, sort: "updateDate+desc" },
+        timeout: 10000,
       });
       res.json(response.data);
     } catch (error: any) {
@@ -365,10 +368,10 @@ async function startServer() {
     try {
       const response = await axios.get("https://www.federalregister.gov/api/v1/documents.json", {
         params: {
-          per_page: 10,
+          per_page: 25,
           order: "newest",
         },
-        timeout: 5000,
+        timeout: 10000,
       });
       res.json(response.data);
     } catch (error: any) {
@@ -384,13 +387,31 @@ async function startServer() {
       if (!apiKey) return res.status(500).json({ error: "OPENSTATES_API_KEY not configured" });
       if (!state) return res.status(400).json({ error: "State parameter is required" });
 
+      const cacheKey = String(state);
+      const cached = stateLegislationCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < STATE_CACHE_TTL) {
+        return res.json(cached.data);
+      }
+
       const response = await axios.get("https://v3.openstates.org/bills", {
-        params: { jurisdiction: state, sort: "updated_desc", per_page: 10, apikey: apiKey },
-        timeout: 5000,
+        params: { jurisdiction: state, sort: "updated_desc", per_page: 25, apikey: apiKey },
+        timeout: 15000,
+      });
+      stateLegislationCache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now(),
       });
       res.json(response.data);
     } catch (error: any) {
       console.error("Open States API Error:", error.message);
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const cacheKey = String(req.query.state || "");
+        const cached = stateLegislationCache.get(cacheKey);
+        if (cached) {
+          return res.json(cached.data);
+        }
+        return res.json({ results: [] });
+      }
       res.status(500).json({ error: "Failed to fetch state legislation" });
     }
   });
@@ -404,10 +425,10 @@ async function startServer() {
       const response = await axios.get(`https://api.govinfo.gov/collections/BILLS/${startDate}`, {
         params: {
           api_key: apiKey,
-          pageSize: 10,
+          pageSize: 25,
           offsetMark: "*",
         },
-        timeout: 5000,
+        timeout: 10000,
       });
       res.json(response.data);
     } catch (error: any) {
@@ -428,7 +449,7 @@ async function startServer() {
         list.findIndex((item) => item.title === entry.title || item.sourceUrl === entry.sourceUrl) === index
       );
 
-      res.json(deduped.slice(0, 8));
+      res.json(deduped);
     } catch (error: any) {
       console.error("Scraper Error:", error.message);
       res.json([]);
@@ -497,13 +518,15 @@ async function startServer() {
     const state = String(req.body?.state || "");
     const city = String(req.body?.city || "");
     const userSituation = String(req.body?.userSituation || "");
+    const primaryInterest = String(req.body?.primaryInterest || "all");
     const rawData = req.body?.rawData || {};
-    if (!ai || !state || !city) return res.json({ laws: [] });
+    if (!ai || !state) return res.json({ laws: [] });
 
     try {
       const laws = await generateAiJson<any[]>({
-        prompt: `You are a civic information expert. Return 5 to 8 recent or significant laws, bills, or ordinances that affect daily life for a resident of ${city}, ${state}.
+        prompt: `You are a civic information expert. Return 15 to 30 recent or significant laws, bills, or ordinances that affect daily life for a resident of ${city ? `${city}, ${state}` : state}.
 ${userSituation ? `User situation: ${userSituation}. Prioritize direct relevance.` : ""}
+${primaryInterest !== "all" ? `Primary interest: ${primaryInterest}. Rank laws in this area first while still including other important state and federal items.` : ""}
 Use this official raw data as your primary source:
 Federal: ${JSON.stringify(rawData.federal)}
 State: ${JSON.stringify(rawData.state)}
