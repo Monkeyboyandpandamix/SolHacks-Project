@@ -12,9 +12,204 @@ const stateCodes: { [key: string]: string } = {
   "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY"
 };
 
-export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string): Promise<Law[]> {
-  const model = "gemini-3-flash-preview";
-  const stateCode = stateCodes[state] || state;
+function toArray<T>(value: T[] | undefined | null): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function clip(text: string | undefined, max = 240): string {
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function normalizeStatus(text: string | undefined): Law["status"] {
+  const value = (text || "").toLowerCase();
+  if (value.includes("pass") || value.includes("enact") || value.includes("became law") || value.includes("signed")) return "passed";
+  if (value.includes("reject") || value.includes("fail") || value.includes("veto")) return "rejected";
+  if (value.includes("update") || value.includes("amend")) return "updated";
+  return "proposed";
+}
+
+function buildFallbackLaws(rawData: any, state: string, city: string): Law[] {
+  const federalBills = toArray(rawData?.federal?.bills).map((bill: any, index: number) => {
+    const title = bill.title || `${bill.type || "Bill"} ${bill.number || index + 1}`;
+    const latestAction = bill.latestAction?.text || bill.latestAction?.actionDate || "Recent federal legislative activity.";
+    const congress = bill.congress ? `Congress ${bill.congress}` : "Federal";
+    return {
+      id: `federal-${bill.congress || "x"}-${bill.type || "bill"}-${bill.number || index}`,
+      title,
+      originalText: latestAction,
+      simplifiedSummary: clip(`${title}. ${latestAction} This is federal legislation that may affect residents in ${city}, ${state}.`, 280),
+      impact: `This is a federal bill with recent activity. Review the source to see whether it changes rules, funding, or protections that affect people in ${city}.`,
+      category: "Government",
+      level: "federal" as const,
+      status: normalizeStatus(bill.latestAction?.text),
+      location: { state, city },
+      date: bill.updateDate || bill.latestAction?.actionDate || "Recent",
+      sourceUrl: bill.url,
+      timeline: bill.latestAction?.actionDate ? [{
+        stage: "introduced" as const,
+        date: bill.latestAction.actionDate,
+        description: latestAction,
+      }] : undefined,
+      votes: { support: 0, oppose: 0 },
+      comments: [],
+    } satisfies Law;
+  });
+
+  const stateBills = toArray(rawData?.state?.results || rawData?.state?.bills).map((bill: any, index: number) => {
+    const title = bill.title || bill.identifier || `State Bill ${index + 1}`;
+    const summary = bill.abstracts?.[0]?.abstract || bill.extras?._scraped_summary || bill.title || "Recent state legislative activity.";
+    const latestAction = bill.latest_action_description || bill.latestAction?.description || bill.latest_action || "Recent state legislative activity.";
+    const sourceUrl = bill.openstates_url || bill.sources?.[0]?.url || bill.versions?.[0]?.links?.[0]?.url;
+    return {
+      id: `state-${bill.identifier || bill.id || index}`,
+      title,
+      originalText: clip(summary, 400),
+      simplifiedSummary: clip(`${title}. ${summary} This is a state-level bill relevant to ${state} residents.`, 280),
+      impact: `This is a state bill that could affect services, rights, or requirements for people living in ${state}. Check the source for the latest status and full text.`,
+      category: bill.classification?.[0] || "State Policy",
+      level: "state" as const,
+      status: normalizeStatus(latestAction),
+      location: { state, city },
+      date: bill.updated_at || bill.latest_action_date || "Recent",
+      sourceUrl,
+      timeline: latestAction ? [{
+        stage: "committee" as const,
+        date: bill.latest_action_date || bill.updated_at || "Recent",
+        description: latestAction,
+      }] : undefined,
+      votes: { support: 0, oppose: 0 },
+      comments: [],
+    } satisfies Law;
+  });
+
+  const documents = toArray(rawData?.documents?.packages).map((pkg: any, index: number) => {
+    const title = pkg.title || pkg.packageId || `Government Document ${index + 1}`;
+    const summary = pkg.summary || pkg.category || "Recent government publication.";
+    const link = pkg.detailsLink || pkg.packageLink || pkg.granulesLink || pkg.download?.pdfLink;
+    return {
+      id: `document-${pkg.packageId || index}`,
+      title,
+      originalText: summary,
+      simplifiedSummary: clip(`${title}. ${summary} This is a recent government document connected to public policy.`, 280),
+      impact: `This document may provide policy details, official notices, or legislative background that helps explain recent government actions.`,
+      category: "Government Documents",
+      level: "federal" as const,
+      status: "updated" as const,
+      location: { state, city },
+      date: pkg.lastModified || pkg.dateIssued || "Recent",
+      sourceUrl: link,
+      votes: { support: 0, oppose: 0 },
+      comments: [],
+    } satisfies Law;
+  });
+
+  const scraped = toArray(rawData?.scraped).map((item: any, index: number) => ({
+    id: item.id || `local-${index}`,
+    title: item.title || `Local legislation ${index + 1}`,
+    originalText: item.summary || "Recent local legislative activity.",
+    simplifiedSummary: clip(`${item.title || `Local legislation ${index + 1}`}. ${item.summary || "Recent local legislative activity."} This appears to affect ${city}, ${state}.`, 280),
+    impact: `This is local legislation or a local policy item that may affect residents in ${city}. Review the source page for the current details.`,
+    category: "Local Government",
+    level: (item.level === "state" ? "state" : item.level === "county" ? "county" : "city") as Law["level"],
+    status: "updated" as const,
+    location: { state, city },
+    date: item.date || "Recent",
+    sourceUrl: item.sourceUrl,
+    votes: { support: 0, oppose: 0 },
+    comments: [],
+  }));
+
+  const deduped = [...federalBills, ...stateBills, ...documents, ...scraped]
+    .filter((law) => law.title && law.id)
+    .filter((law, index, arr) => arr.findIndex((other) => other.title === law.title) === index);
+
+  return deduped;
+}
+
+export async function localizeLaws(laws: Law[], targetLanguage: string): Promise<Law[]> {
+  if (targetLanguage === "English" || laws.length === 0) {
+    return laws;
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: `Translate the following civic law feed content into ${targetLanguage}. Preserve the JSON structure exactly. Translate simplifiedSummary, impact, personalImpact, glossary definitions, poll questions, and poll option labels. Keep law ids, URLs, dates, and status values unchanged. Titles may be translated if natural.\n\n${JSON.stringify(laws)}`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              title: { type: Type.STRING },
+              originalText: { type: Type.STRING },
+              simplifiedSummary: { type: Type.STRING },
+              impact: { type: Type.STRING },
+              personalImpact: { type: Type.STRING },
+              category: { type: Type.STRING },
+              level: { type: Type.STRING, enum: ["federal", "state", "county", "city"] },
+              status: { type: Type.STRING, enum: ["proposed", "passed", "rejected", "updated"] },
+              date: { type: Type.STRING },
+              sourceUrl: { type: Type.STRING },
+              timeline: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    stage: { type: Type.STRING, enum: ["introduced", "committee", "voting", "passed", "law", "rejected"] },
+                    date: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                  }
+                }
+              },
+              glossary: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    term: { type: Type.STRING },
+                    definition: { type: Type.STRING }
+                  }
+                }
+              },
+              poll: {
+                type: Type.OBJECT,
+                properties: {
+                  question: { type: Type.STRING },
+                  options: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        label: { type: Type.STRING },
+                        count: { type: Type.NUMBER }
+                      }
+                    }
+                  },
+                  userChoice: { type: Type.STRING }
+                }
+              }
+            },
+            required: ["id", "title", "originalText", "simplifiedSummary", "impact", "category", "level", "status", "date"]
+          }
+        }
+      }
+    });
+
+    const translated = JSON.parse(response.text || "[]");
+    return Array.isArray(translated) && translated.length === laws.length ? translated : laws;
+  } catch (error) {
+    console.warn(`Failed to localize laws into ${targetLanguage}`, error);
+    return laws;
+  }
+}
+
+export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string, primaryInterest: string = "all"): Promise<Law[]> {
+  const model = "gemini-1.5-flash";
+  const locationLabel = city?.trim() ? `${city}, ${state}` : state;
 
   let rawData: any = {
     federal: null,
@@ -27,9 +222,9 @@ export async function fetchLaws(state: string, city: string, language: string = 
   try {
     const [fedRes, stateRes, docRes, scrapeRes] = await Promise.allSettled([
       axios.get("/api/legislation/federal"),
-      axios.get(`/api/legislation/state?state=${stateCode}`),
+      axios.get(`/api/legislation/state?state=${encodeURIComponent(state)}`),
       axios.get("/api/legislation/documents"),
-      axios.get(`/api/legislation/scrape?state=${state}&city=${city}`)
+      axios.get(`/api/legislation/scrape?state=${encodeURIComponent(state)}&city=${encodeURIComponent(city)}`)
     ]);
 
     if (fedRes.status === "fulfilled") rawData.federal = fedRes.value.data;
@@ -41,12 +236,24 @@ export async function fetchLaws(state: string, city: string, language: string = 
   }
 
   const hasRawData = rawData.federal || rawData.state || rawData.documents || rawData.scraped;
+  const fallbackLaws = buildFallbackLaws(rawData, state, city);
 
-  const prompt = `You are a civic information expert. I need to present recent or significant laws, bills, or local ordinances that affect daily life for a resident of ${city}, ${state}. 
+  console.log("fetchLaws raw data summary", {
+    location: locationLabel,
+    primaryInterest,
+    federalCount: Array.isArray(rawData.federal?.bills) ? rawData.federal.bills.length : 0,
+    stateCount: Array.isArray(rawData.state?.results) ? rawData.state.results.length : Array.isArray(rawData.state?.bills) ? rawData.state.bills.length : 0,
+    documentCount: Array.isArray(rawData.documents?.packages) ? rawData.documents.packages.length : 0,
+    scrapedCount: Array.isArray(rawData.scraped) ? rawData.scraped.length : 0,
+    fallbackCount: fallbackLaws.length,
+  });
+
+  const prompt = `You are a civic information expert. I need to present recent or significant laws, bills, or local ordinances that affect daily life for a resident of ${locationLabel}. 
   
   ${userSituation ? `The user's situation is: "${userSituation}". Prioritize laws that are highly relevant to this specific context.` : ""}
+  ${primaryInterest !== "all" ? `The user's primary interest is "${primaryInterest}". Prioritize laws in this area, but still include some broader important state or federal items.` : ""}
   
-  I have gathered specific raw data from official sources and web scrapers:
+  I have gathered specific raw data from official sources and optional web scrapers:
   Federal (Congress.gov): ${JSON.stringify(rawData.federal)}
   State (Open States): ${JSON.stringify(rawData.state)}
   Documents (GovInfo): ${JSON.stringify(rawData.documents)}
@@ -54,9 +261,10 @@ export async function fetchLaws(state: string, city: string, language: string = 
   
   CRITICAL: 
   1. If raw data is provided, use it as the primary source.
-  2. If raw data is missing or insufficient, use your Google Search tool to find the most recent and relevant laws for ${city}, ${state}.
-  3. You MUST return at least 5-8 laws. If you cannot find enough specific local ordinances, include relevant state or federal laws that impact residents of ${city}.
-  4. Ensure the laws are diverse (Housing, Labor, Education, etc.).
+  2. Prioritize federal and state legislation for all 50 U.S. states. Local scraped data is optional and may be missing.
+  3. If raw data is missing or insufficient, use your Google Search tool to find the most recent and relevant federal and state laws for ${locationLabel}.
+  4. You MUST return as many relevant laws as you can, ideally 15-30 items. If you cannot find enough location-specific items, include relevant state or federal laws that impact residents of ${locationLabel}.
+  5. Ensure the laws are diverse (Housing, Labor, Education, etc.), but give extra weight to the user's primary interest when provided.
   
   For each law, provide:
   1. ID (a unique identifier)
@@ -142,7 +350,19 @@ export async function fetchLaws(state: string, city: string, language: string = 
     });
 
     const laws = JSON.parse(response.text || "[]");
-    return laws.map((law: any) => ({
+    if (!Array.isArray(laws) || laws.length === 0) {
+      console.warn("Gemini returned no laws, using normalized live fallback", {
+        location: locationLabel,
+        fallbackCount: fallbackLaws.length,
+      });
+      return await localizeLaws(fallbackLaws, language);
+    }
+
+    console.log("Gemini returned laws", {
+      location: locationLabel,
+      count: laws.length,
+    });
+    const normalizedLaws = laws.map((law: any) => ({
       ...law,
       location: { state, city },
       votes: { support: Math.floor(Math.random() * 100), oppose: Math.floor(Math.random() * 50) },
@@ -151,15 +371,30 @@ export async function fetchLaws(state: string, city: string, language: string = 
         ...law.poll,
         options: law.poll.options.map((opt: any) => ({ ...opt, count: Math.floor(Math.random() * 50) }))
       } : undefined
-    }));
+    })).filter((law: Law, index: number, arr: Law[]) => arr.findIndex((other) => other.id === law.id || other.title === law.title) === index);
+
+    if (language !== "English") {
+      console.log("Forcing localization for laws", {
+        location: locationLabel,
+        language,
+        count: normalizedLaws.length,
+      });
+      return await localizeLaws(normalizedLaws, language);
+    }
+
+    return normalizedLaws;
   } catch (e) {
     console.error("Failed to fetch or parse laws", e);
-    return [];
+    console.warn("Using normalized live fallback after Gemini failure", {
+      location: locationLabel,
+      fallbackCount: fallbackLaws.length,
+    });
+    return await localizeLaws(fallbackLaws, language);
   }
 }
 
 export async function generateAdvocacyLetter(law: Law, stance: 'support' | 'oppose', userSituation?: string): Promise<string> {
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-1.5-flash";
   const prompt = `You are a civic engagement assistant. Draft a professional and persuasive advocacy letter to an elected representative.
   
   Law Title: ${law.title}
@@ -189,7 +424,7 @@ export async function generateAdvocacyLetter(law: Law, stance: 'support' | 'oppo
 
 export async function chatWithLawyer(history: ChatMessage[], message: string, context: Law[], userSituation?: string): Promise<string> {
   const chat = ai.chats.create({
-    model: "gemini-3-flash-preview",
+    model: "gemini-1.5-flash",
     config: {
       systemInstruction: `You are an AI Civic Assistant. Your goal is to help users understand laws and legislation. 
       ${userSituation ? `The user's situation is: "${userSituation}". Tailor your answers to this specific context.` : ""}
@@ -205,7 +440,7 @@ export async function chatWithLawyer(history: ChatMessage[], message: string, co
 }
 
 export async function translateContent(text: string, targetLanguage: string): Promise<string> {
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-1.5-flash";
   const response = await ai.models.generateContent({
     model,
     contents: `Translate the following text into ${targetLanguage}: "${text}"`,
@@ -214,7 +449,7 @@ export async function translateContent(text: string, targetLanguage: string): Pr
 }
 
 export async function compareLawsWithAI(law1: Law, law2: Law): Promise<string> {
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-1.5-flash";
   const prompt = `Compare the following two laws and provide a concise analysis of their key differences, potential conflicts, and unique impacts.
   
   Law 1: ${law1.title}

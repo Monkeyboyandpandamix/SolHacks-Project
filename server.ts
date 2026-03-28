@@ -4,8 +4,15 @@ import path from "path";
 import axios from "axios";
 import dotenv from "dotenv";
 import * as cheerio from "cheerio";
+import { GoogleGenAI } from "@google/genai";
 
+// Support local development secrets in `.env.local` while still allowing `.env`.
+dotenv.config({ path: ".env.local" });
 dotenv.config();
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+const stateLegislationCache = new Map<string, { data: any; timestamp: number }>();
+const STATE_CACHE_TTL = 30 * 60 * 1000;
 
 async function startServer() {
   const app = express();
@@ -25,12 +32,15 @@ async function startServer() {
         params: {
           api_key: apiKey,
           format: "json",
-          limit: 10,
+          limit: 25,
           sort: "updateDate+desc"
         },
-        timeout: 5000 // 5 second timeout
+        timeout: 10000
       });
 
+      console.log("Federal API success:", {
+        count: Array.isArray(response.data?.bills) ? response.data.bills.length : 0
+      });
       res.json(response.data);
     } catch (error: any) {
       console.error("Congress.gov API Error:", error.message);
@@ -50,20 +60,43 @@ async function startServer() {
         return res.status(400).json({ error: "State parameter is required" });
       }
 
+      const cacheKey = String(state);
+      const cached = stateLegislationCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < STATE_CACHE_TTL) {
+        return res.json(cached.data);
+      }
+
       const response = await axios.get("https://v3.openstates.org/bills", {
         params: {
           jurisdiction: state,
           sort: "updated_desc",
-          per_page: 10,
+          per_page: 25,
           apikey: apiKey
         },
-        timeout: 5000 // 5 second timeout
+        timeout: 15000
       });
 
+      console.log("OpenStates API success:", {
+        state,
+        count: Array.isArray(response.data?.results) ? response.data.results.length : Array.isArray(response.data?.bills) ? response.data.bills.length : 0
+      });
+      stateLegislationCache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now(),
+      });
       res.json(response.data);
     } catch (error: any) {
       console.error("Open States API Error:", error.message);
-      res.status(500).json({ error: "Failed to fetch state legislation" });
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const cacheKey = String(req.query.state || "");
+        const cached = stateLegislationCache.get(cacheKey);
+        if (cached) {
+          console.warn(`OpenStates rate limited, using cached data for ${cacheKey}`);
+          return res.json(cached.data);
+        }
+        return res.json({ results: [] });
+      }
+      res.status(500).json({ error: "Failed to fetch state legislation for the requested U.S. state" });
     }
   });
 
@@ -74,19 +107,26 @@ async function startServer() {
         return res.status(500).json({ error: "GOVINFO_API_KEY not configured" });
       }
 
-      const response = await axios.get("https://api.govinfo.gov/packages", {
+      const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .replace(/\.\d{3}Z$/, "Z");
+
+      const response = await axios.get(`https://api.govinfo.gov/collections/BILLS/${startDate}`, {
         params: {
           api_key: apiKey,
-          pageSize: 10,
-          lastModifiedStartDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+          offsetMark: "*",
+          pageSize: 25,
         },
-        timeout: 5000 // 5 second timeout
+        timeout: 10000
       });
 
+      console.log("GovInfo API success:", {
+        count: Array.isArray(response.data?.packages) ? response.data.packages.length : 0
+      });
       res.json(response.data);
     } catch (error: any) {
       console.error("GovInfo API Error:", error.message);
-      res.status(500).json({ error: "Failed to fetch government documents" });
+      res.json({ packages: [] });
     }
   });
 
@@ -162,23 +202,15 @@ async function startServer() {
     }
 
     try {
-      // Use Gemini to suggest real cities/counties in the given state based on the query
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          contents: [{
-            parts: [{
-              text: `List 5 real cities or counties in ${state} that start with or contain "${query}". Return only a JSON array of strings, nothing else.`
-            }]
-          }],
-          generationConfig: {
-            responseMimeType: "application/json"
-          }
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: `List 5 real cities or counties in ${state} that start with or contain "${query}". Return only a JSON array of strings, nothing else.`,
+        config: {
+          responseMimeType: "application/json"
         }
-      );
+      });
 
-      const text = response.data.candidates[0].content.parts[0].text;
-      const suggestions = JSON.parse(text);
+      const suggestions = JSON.parse(response.text || "[]");
       res.json(Array.isArray(suggestions) ? suggestions : []);
     } catch (error: any) {
       console.error("Location Suggestion Error:", error.message);

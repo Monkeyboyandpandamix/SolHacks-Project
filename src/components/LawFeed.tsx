@@ -2,7 +2,7 @@ import React from 'react';
 import LawCard from './LawCard';
 import { Law } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface LawFeedProps {
   laws: Law[];
@@ -16,6 +16,10 @@ interface LawFeedProps {
   comparingIds?: string[];
   onToggleFollowTopic?: (topic: string) => void;
   followedTopics?: string[];
+  totalCount?: number;
+  currentPage?: number;
+  totalPages?: number;
+  onPageChange?: (page: number) => void;
 }
 
 const SkeletonCard = () => (
@@ -30,7 +34,7 @@ const SkeletonCard = () => (
   </div>
 );
 
-const LawFeed: React.FC<LawFeedProps> = ({ laws, isLoading, error, onSave, onVote, onComment, onPollVote, onCompare, comparingIds = [], onToggleFollowTopic, followedTopics = [] }) => {
+const LawFeed: React.FC<LawFeedProps> = ({ laws, isLoading, error, onSave, onVote, onComment, onPollVote, onCompare, comparingIds = [], onToggleFollowTopic, followedTopics = [], totalCount, currentPage = 1, totalPages = 1, onPageChange }) => {
   const [loadingStep, setLoadingStep] = React.useState(0);
   const steps = [
     "Establishing secure connection to federal archives...",
@@ -124,7 +128,7 @@ const LawFeed: React.FC<LawFeedProps> = ({ laws, isLoading, error, onSave, onVot
     <div className="w-full">
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-2xl font-bold tracking-tight">Recent Legislation</h2>
-        <span className="text-sm font-medium text-muted">{laws.length} laws found</span>
+        <span className="text-sm font-medium text-muted">{totalCount ?? laws.length} laws found</span>
       </div>
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -146,6 +150,37 @@ const LawFeed: React.FC<LawFeedProps> = ({ laws, isLoading, error, onSave, onVot
           />
         ))}
       </motion.div>
+      {onPageChange && totalPages > 1 && (
+        <div className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-[32px] border-2 border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/30">
+          <button
+            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-500 transition-all hover:border-indigo-600 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <ChevronLeft size={16} />
+            PREVIOUS
+          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+              <button
+                key={page}
+                onClick={() => onPageChange(page)}
+                className={`h-11 min-w-11 rounded-2xl px-4 text-xs font-black transition-all ${page === currentPage ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-slate-200 bg-white text-slate-500 hover:border-indigo-600 hover:text-indigo-600'}`}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+            className="flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-500 transition-all hover:border-indigo-600 hover:text-indigo-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            NEXT
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
