@@ -1,7 +1,7 @@
 export interface UserProfile {
   uid: string;
   email: string;
-  situation?: string; // e.g., "I'm an international student working part-time"
+  situation?: string;
   location: {
     state: string;
     city: string;
@@ -112,7 +112,7 @@ export interface Law {
   timeline?: LawTimeline[];
   glossary?: GlossaryItem[];
   personalImpact?: string;
-  lastUpdated?: string; // For caching logic
+  lastUpdated?: string;
   conflictAnalysis?: ConflictAnalysis;
   hearings?: HearingEvent[];
   advocacyGroups?: AdvocacyGroup[];
@@ -138,7 +138,7 @@ export interface Representative {
   phones?: string[];
   urls?: string[];
   channels?: RepresentativeChannel[];
-  sponsoredBills?: string[]; // IDs of bills
+  sponsoredBills?: string[];
   votingRecord?: RepresentativeVoteRecord[];
 }
 

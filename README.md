@@ -14,6 +14,15 @@ CivicLens is a democracy-focused application that helps users stay informed abou
 
 ## :large_blue_diamond: Additional Feature Recommendations
 
+| Feature | Description |
+|---|---|
+| **Plain Language Summarizer** | AI condenses dense legal text into a 3-sentence plain English summary per law |
+| **"How Does This Affect Me?" Engine** | User fills a profile (homeowner, student, small business owner, parent, etc.) — AI personalizes impact analysis |
+| **Side-by-Side Law Comparator** | Compare how the same issue is legislated across different states |
+| **Conflict Detector** | AI flags when a state law potentially conflicts with a federal law |
+| **Legal Jargon Glossary** | Inline definitions when hovering over complex legal terms |
+>>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
+=======
 ### 1. AI-Enhanced Comprehension Features
 | Feature | Description | Status |
 |---|---|---|
@@ -22,31 +31,54 @@ CivicLens is a democracy-focused application that helps users stay informed abou
 | **Side-by-Side Law Comparator** | Compare how the same issue is legislated across different states | In Progress |
 | **Conflict Detector** | AI flags when a state law potentially conflicts with a federal law | Planned |
 | **Legal Jargon Glossary** | Inline definitions when hovering over complex legal terms | Planned |
+=======
+| Feature | Description |
+|---|---|
+| **Plain Language Summarizer** | AI condenses dense legal text into a 3-sentence plain English summary per law |
+| **"How Does This Affect Me?" Engine** | User fills a profile (homeowner, student, small business owner, parent, etc.) — AI personalizes impact analysis |
+| **Side-by-Side Law Comparator** | Compare how the same issue is legislated across different states |
+| **Conflict Detector** | AI flags when a state law potentially conflicts with a federal law |
+| **Legal Jargon Glossary** | Inline definitions when hovering over complex legal terms |
+>>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
 
 ---
 
-### 2. Civic Engagement & Action Features
-| Feature | Description | Status |
-|---|---|---|
-| **AI Letter/Email Generator** | Drafts a personalized advocacy letter to the user's elected representative based on selected law and stance | Planned |
-| **Representative Finder** | Auto-populates elected officials (federal, state, local) based on user ZIP code via Google Civic API | Planned |
-| **Voting Record Integration** | Shows how representatives voted on similar past bills through ProPublica Congress API data | Planned |
-| **Legislative Status Tracker** | Visual bill progress bar: Introduced → Committee → Floor Vote → Signed/Vetoed | Planned |
-| **Hearing Calendar** | Upcoming public hearings where citizens can testify, with registration links | Planned |
+| Feature | Description |
+|---|---|
+| **AI Letter/Email Generator** | Drafts a personalized advocacy letter to the user's elected representative based on selected law + user's stance |
+=======
+| Feature | Description |
+|---|---|
+| **AI Letter/Email Generator** | Drafts a personalized advocacy letter to the user's elected representative based on selected law + user's stance |
+| **Representative Finder** | Auto-populates elected officials (federal, state, local) based on user ZIP code via Google Civic API |
+| **Voting Record Integration** | Shows how representatives voted on similar past bills — pulls from ProPublica Congress API |
+| **Legislative Status Tracker** | Visual bill progress bar: Introduced → Committee → Floor Vote → Signed/Vetoed |
+| **Hearing Calendar** | Upcoming public hearings where citizens can testify — with registration links |
+>>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
 
 ---
 
 ### 3. Community & Collaboration Features
+<<<<<<< HEAD
 | Feature | Description | Status |
 |---|---|---|
 | **Community Commentary** | Per-law threaded discussion board moderated by AI for civility | Planned |
 | **Advocacy Groups Directory** | Organizations working on the same law so users can connect directly | Planned |
 | **Collective Bookmarks** | Groups and coalitions can share curated law lists | Planned |
 | **Crowd-sourced Impact Stories** | Citizens submit how a law affected them personally in a verified, anonymized format | Planned |
+=======
+| Feature | Description |
+|---|---|
+| **Community Commentary** | Per-law threaded discussion board (moderated by AI for civility) |
+| **Advocacy Groups Directory** | Orgs working on the same law — users can connect |
+| **Collective Bookmarks** | Groups/coalitions can share curated law lists |
+| **Crowd-sourced Impact Stories** | Citizens submit how a law affected them personally (verified, anonymized) |
+>>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
 
 ---
 
 ### 4. Intelligence & Discovery Features
+<<<<<<< HEAD
 | Feature | Description | Status |
 |---|---|---|
 | **Smart Alerts** | Notify users when bookmarked bills change status or new laws match their interest tags | Planned |
@@ -54,15 +86,32 @@ CivicLens is a democracy-focused application that helps users stay informed abou
 | **"Related Laws" Recommendation** | Collaborative and content-based filtering for laws with similar issues and effects | Planned |
 | **Multi-language Support** | AI translation in Spanish, Mandarin, and other languages for accessibility | Planned |
 | **Audio Summaries** | Text-to-speech summaries for visually impaired or low-literacy users | Planned |
+=======
+| Feature | Description |
+|---|---|
+| **Smart Alerts** | Notify users when bookmarked bills change status or new laws match their interest tags |
+| **Trending Laws Dashboard** | What's being discussed most in your state this week |
+| **"Related Laws" Recommendation** | Collaborative + content-based filtering ("Laws similar to this") |
+| **Multi-language Support** | AI translation (Spanish, Mandarin, etc.) for accessibility |
+| **Audio Summaries** | TTS (Text-to-Speech) for visually impaired or low-literacy users |
+>>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
 
 ---
 
 ### 5. Analytics & Transparency (for Orgs & Power Users)
+<<<<<<< HEAD
 | Feature | Description | Status |
 |---|---|---|
 | **Advocacy Campaign Dashboard** | Track petition signatures, letters sent, and views per law | Planned |
 | **Sentiment Heatmap** | Geographic view of public sentiment on a law across counties | Planned |
 | **Legislation Velocity Score** | AI predicts likelihood of a bill passing based on historical patterns | Planned |
+=======
+| Feature | Description |
+|---|---|
+| **Advocacy Campaign Dashboard** | Track petition signatures, letters sent, views per law |
+| **Sentiment Heatmap** | Geographic view of public sentiment on a law across counties |
+| **Legislation Velocity Score** | AI predicts likelihood of a bill passing based on historical patterns |
+>>>>>>> 7073e33ac10a7975cb4b0c18175c5b186de57836
 
 ---
 

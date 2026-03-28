@@ -1,16 +1,23 @@
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
-import { Law, ChatMessage, ConflictAnalysis, Representative, RepresentativeVoteRecord } from "../types";
+import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import axios from "axios";
+import {
+  ChatMessage,
+  ConflictAnalysis,
+  HearingEvent,
+  Law,
+  Representative,
+  RepresentativeVoteRecord,
+} from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY);
 
-const stateCodes: { [key: string]: string } = {
-  "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA", "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "Florida": "FL", "Georgia": "GA",
-  "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL", "Indiana": "IN", "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
-  "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN", "Mississippi": "MS", "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV", "New Hampshire": "NH", "New Jersey": "NJ",
-  "New Mexico": "NM", "New York": "NY", "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR", "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC",
-  "South Dakota": "SD", "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA", "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY"
+const stateCodes: Record<string, string> = {
+  Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA", Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA",
+  Hawaii: "HI", Idaho: "ID", Illinois: "IL", Indiana: "IN", Iowa: "IA", Kansas: "KS", Kentucky: "KY", Louisiana: "LA", Maine: "ME", Maryland: "MD",
+  Massachusetts: "MA", Michigan: "MI", Minnesota: "MN", Mississippi: "MS", Missouri: "MO", Montana: "MT", Nebraska: "NE", Nevada: "NV", "New Hampshire": "NH", "New Jersey": "NJ",
+  "New Mexico": "NM", "New York": "NY", "North Carolina": "NC", "North Dakota": "ND", Ohio: "OH", Oklahoma: "OK", Oregon: "OR", Pennsylvania: "PA", "Rhode Island": "RI", "South Carolina": "SC",
+  "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT", Vermont: "VT", Virginia: "VA", Washington: "WA", "West Virginia": "WV", Wisconsin: "WI", Wyoming: "WY",
 };
 
 const glossaryByCategory: Record<string, { term: string; definition: string }[]> = {
@@ -67,10 +74,7 @@ function buildTimeline(date: string, status: Law["status"]): Law["timeline"] {
     { stage: "committee" as const, date, description: "Assigned for committee review." },
   ];
   if (status === "proposed" || status === "updated") {
-    return [
-      ...base,
-      { stage: "voting" as const, date, description: "Awaiting or moving through floor voting." },
-    ];
+    return [...base, { stage: "voting" as const, date, description: "Awaiting or moving through floor voting." }];
   }
   if (status === "passed") {
     return [
@@ -80,10 +84,7 @@ function buildTimeline(date: string, status: Law["status"]): Law["timeline"] {
       { stage: "law" as const, date, description: "Measure is now in force or pending final enactment." },
     ];
   }
-  return [
-    ...base,
-    { stage: "rejected" as const, date, description: "The measure did not advance." },
-  ];
+  return [...base, { stage: "rejected" as const, date, description: "The measure did not advance." }];
 }
 
 function buildGlossary(category: string) {
@@ -101,18 +102,16 @@ function computeVelocityScore(status: Law["status"], timeline?: Law["timeline"],
   return Math.min(99, base + stageBoost + sentimentBoost);
 }
 
-function buildHearings(law: Partial<Law>, state: string, city: string) {
+function buildHearings(law: Partial<Law>, city: string): HearingEvent[] {
   const date = law.date || new Date().toLocaleDateString();
-  return [
-    {
-      id: `${law.id}-hearing`,
-      title: `${law.title} Public Hearing`,
-      date,
-      venue: `${city} Civic Center`,
-      type: "hearing" as const,
-      registrationUrl: law.sourceUrl,
-    },
-  ];
+  return [{
+    id: `${law.id}-hearing`,
+    title: `${law.title} Public Hearing`,
+    date,
+    venue: `${city} Civic Center`,
+    type: "hearing",
+    registrationUrl: law.sourceUrl,
+  }];
 }
 
 function buildAdvocacyGroups(category: string) {
@@ -141,6 +140,7 @@ function createLawFromRaw(input: Partial<Law> & { id: string; title: string; sum
     support: Math.floor(Math.random() * 60) + 20,
     oppose: Math.floor(Math.random() * 25) + 5,
   };
+
   const law: Law = {
     id: input.id,
     title: input.title,
@@ -158,7 +158,7 @@ function createLawFromRaw(input: Partial<Law> & { id: string; title: string; sum
     timeline,
     glossary: input.glossary || buildGlossary(category),
     personalImpact: input.personalImpact || input.impact,
-    hearings: input.hearings || buildHearings(input, state, city),
+    hearings: input.hearings || buildHearings(input, city),
     advocacyGroups: input.advocacyGroups || buildAdvocacyGroups(category),
     impactStories: input.impactStories || [],
   };
@@ -249,24 +249,54 @@ function enrichLaws(laws: Law[], state: string, city: string): Law[] {
   });
 }
 
+async function translateBatch(texts: string[], targetLanguage: string) {
+  if (targetLanguage === "English" || texts.length === 0) return texts;
+  try {
+    const response = await axios.post("/api/ai/translate-batch", { texts, targetLanguage });
+    return Array.isArray(response.data?.translations) ? response.data.translations : texts;
+  } catch {
+    return texts;
+  }
+}
+
+async function applyTranslationToLaws(laws: Law[], targetLanguage: string): Promise<Law[]> {
+  if (targetLanguage === "English" || laws.length === 0) return laws;
+  const translated = await Promise.all(laws.map(async (law) => {
+    const glossaryDefinitions = (law.glossary || []).map(item => item.definition);
+    const fields = [
+      law.simplifiedSummary,
+      law.impact,
+      law.personalImpact || law.impact,
+      ...glossaryDefinitions,
+    ];
+    const translations = await translateBatch(fields, targetLanguage);
+    const glossary = (law.glossary || []).map((item, index) => ({
+      ...item,
+      definition: translations[index + 3] || item.definition,
+    }));
+    return {
+      ...law,
+      simplifiedSummary: translations[0] || law.simplifiedSummary,
+      impact: translations[1] || law.impact,
+      personalImpact: translations[2] || law.personalImpact,
+      glossary,
+    };
+  }));
+  return translated;
+}
+
 export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string): Promise<Law[]> {
   const model = "gemini-3-flash-preview";
   const stateCode = stateCodes[state] || state;
 
-  let rawData: any = {
-    federal: null,
-    state: null,
-    documents: null,
-    scraped: null
-  };
+  const rawData: any = { federal: null, state: null, documents: null, scraped: null };
 
-  // Try to fetch from external APIs and Scraper via backend
   try {
     const [fedRes, stateRes, docRes, scrapeRes] = await Promise.allSettled([
       axios.get("/api/legislation/federal"),
       axios.get(`/api/legislation/state?state=${stateCode}`),
       axios.get("/api/legislation/documents"),
-      axios.get(`/api/legislation/scrape?state=${state}&city=${city}`)
+      axios.get(`/api/legislation/scrape?state=${state}&city=${city}`),
     ]);
 
     if (fedRes.status === "fulfilled") rawData.federal = fedRes.value.data;
@@ -277,43 +307,22 @@ export async function fetchLaws(state: string, city: string, language: string = 
     console.warn("External API fetch partially failed, falling back to Gemini search for missing parts", e);
   }
 
-  const hasRawData = rawData.federal || rawData.state || rawData.documents || rawData.scraped;
-
   if (!hasGeminiKey) {
-    return enrichLaws(fallbackFromRawData(rawData, state, city), state, city);
+    return applyTranslationToLaws(enrichLaws(fallbackFromRawData(rawData, state, city), state, city), language);
   }
 
-  const prompt = `You are a civic information expert. I need to present recent or significant laws, bills, or local ordinances that affect daily life for a resident of ${city}, ${state}. 
-  
+  const prompt = `You are a civic information expert. I need to present recent or significant laws, bills, or local ordinances that affect daily life for a resident of ${city}, ${state}.
   ${userSituation ? `The user's situation is: "${userSituation}". Prioritize laws that are highly relevant to this specific context.` : ""}
-  
   I have gathered specific raw data from official sources and web scrapers:
   Federal (Congress.gov): ${JSON.stringify(rawData.federal)}
   State (Open States): ${JSON.stringify(rawData.state)}
   Documents (GovInfo): ${JSON.stringify(rawData.documents)}
   Scraped Local/State Data: ${JSON.stringify(rawData.scraped)}
-  
-  CRITICAL: 
+  CRITICAL:
   1. If raw data is provided, use it as the primary source.
   2. If raw data is missing or insufficient, use your Google Search tool to find the most recent and relevant laws for ${city}, ${state}.
   3. You MUST return at least 5-8 laws. If you cannot find enough specific local ordinances, include relevant state or federal laws that impact residents of ${city}.
-  4. Ensure the laws are diverse (Housing, Labor, Education, etc.).
-  
-  For each law, provide:
-  1. ID (a unique identifier)
-  2. Title
-  3. Original complex legal summary (brief)
-  4. Simplified summary in ${language} (STRICTLY 3 sentences)
-  5. Impact explanation (how it affects a regular person) in ${language}
-  6. Personal Impact: If a user situation is provided, explain EXACTLY how this law affects them specifically. If no situation is provided, use a general but detailed impact analysis.
-  7. Glossary: Identify 3-5 complex legal terms used in the law and provide clear, simple definitions.
-  8. Category (Housing, Labor, Immigration, Education, Health, etc.)
-  9. Level (federal, state, county, or city)
-  10. Current status (proposed, passed, updated, or rejected)
-  11. Date of introduction or update.
-  12. Source URL (if provided in raw data, use it; otherwise find the official link).
-  13. Timeline: A list of key stages the law has gone through (e.g., introduced, committee, voting, passed).
-  14. If the status is 'proposed', generate a simple poll question and 2-3 options.`;
+  4. Ensure the laws are diverse (Housing, Labor, Education, etc.).`;
 
   try {
     const response = await ai.models.generateContent({
@@ -339,139 +348,97 @@ export async function fetchLaws(state: string, city: string, language: string = 
                   type: Type.OBJECT,
                   properties: {
                     term: { type: Type.STRING },
-                    definition: { type: Type.STRING }
-                  }
-                }
+                    definition: { type: Type.STRING },
+                  },
+                },
               },
               category: { type: Type.STRING },
               level: { type: Type.STRING, enum: ["federal", "state", "county", "city"] },
               status: { type: Type.STRING, enum: ["proposed", "passed", "rejected", "updated"] },
               date: { type: Type.STRING },
               sourceUrl: { type: Type.STRING },
-              timeline: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    stage: { type: Type.STRING, enum: ["introduced", "committee", "voting", "passed", "law", "rejected"] },
-                    date: { type: Type.STRING },
-                    description: { type: Type.STRING }
-                  }
-                }
-              },
-              poll: {
-                type: Type.OBJECT,
-                properties: {
-                  question: { type: Type.STRING },
-                  options: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.OBJECT,
-                      properties: {
-                        label: { type: Type.STRING },
-                        count: { type: Type.NUMBER }
-                      }
-                    }
-                  }
-                }
-              }
             },
             required: ["id", "title", "originalText", "simplifiedSummary", "impact", "category", "level", "status", "date"],
           },
         },
       },
     });
-
     const laws = JSON.parse(response.text || "[]");
-    return enrichLaws(laws, state, city);
+    return applyTranslationToLaws(enrichLaws(laws, state, city), language);
   } catch (e) {
     console.error("Failed to fetch or parse laws", e);
-    return enrichLaws(fallbackFromRawData(rawData, state, city), state, city);
+    return applyTranslationToLaws(enrichLaws(fallbackFromRawData(rawData, state, city), state, city), language);
   }
 }
 
-export async function generateAdvocacyLetter(law: Law, stance: 'support' | 'oppose', userSituation?: string): Promise<string> {
-  const model = "gemini-3-flash-preview";
-  const prompt = `You are a civic engagement assistant. Draft a professional and persuasive advocacy letter to an elected representative.
-  
-  Law Title: ${law.title}
-  User's Stance: ${stance === 'support' ? 'In Support of' : 'Opposed to'} this legislation.
-  ${userSituation ? `User's Personal Context: "${userSituation}". Use this to make the letter more personal and compelling.` : ""}
-  
-  The letter should:
-  1. Be addressed to "The Honorable [Representative Name]" (placeholder).
-  2. Clearly state the user's position on the law.
-  3. Provide 2-3 strong arguments based on the law's content and the user's situation.
-  4. Use a respectful but firm tone.
-  5. Include placeholders for the user's name and contact information at the end.
-  
-  Return ONLY the text of the letter.`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-    });
-    return response.text || "Failed to generate letter. Please try again.";
-  } catch (e) {
-    console.error("Failed to generate advocacy letter", e);
-    return "Error generating letter. Please check your connection.";
-  }
-}
-
-export async function chatWithLawyer(history: ChatMessage[], message: string, context: Law[], userSituation?: string): Promise<string> {
-  const normalizedHistory = history.length > 0 && history[history.length - 1]?.role === 'user' && history[history.length - 1]?.text === message
-    ? history
-    : [...history, { role: 'user', text: message }];
-  const conversation = normalizedHistory.map(item => `${item.role === 'user' ? 'User' : 'Assistant'}: ${item.text}`).join('\n');
+export async function generateAdvocacyLetter(law: Law, stance: "support" | "oppose", userSituation?: string): Promise<string> {
   if (!hasGeminiKey) {
-    return `Based on the laws currently loaded, the key things to compare are status, jurisdiction, and who is affected. ${userSituation ? `Given your situation, focus on laws that change eligibility, costs, or deadlines for residents like you. ` : ''}If you want a precise answer, ask about one law title at a time.`;
+    return `The Honorable [Representative Name],\n\nI am writing to ${stance === "support" ? "support" : "oppose"} ${law.title}. ${userSituation ? `${userSituation}. ` : ""}${law.impact}\n\nThank you for your attention to this issue.\n\nSincerely,\n[Your Name]`;
   }
 
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `You are an AI Civic Assistant. Your goal is to help users understand laws and legislation.
-    ${userSituation ? `The user's situation is: "${userSituation}". Tailor your answers to this specific context.` : ""}
-    Use the following laws as context: ${JSON.stringify(context.map(l => ({ id: l.id, title: l.title, summary: l.simplifiedSummary, impact: l.impact, status: l.status }))) }.
+    contents: `Draft a professional advocacy letter.
+    Law Title: ${law.title}
+    Position: ${stance}
+    ${userSituation ? `User context: ${userSituation}` : ""}
+    Return only the completed letter.`,
+  });
+  return response.text || "Failed to generate letter. Please try again.";
+}
+
+export async function chatWithLawyer(history: ChatMessage[], message: string, context: Law[], userSituation?: string): Promise<string> {
+  const normalizedHistory = history.length > 0 && history[history.length - 1]?.role === "user" && history[history.length - 1]?.text === message
+    ? history
+    : [...history, { role: "user", text: message }];
+  const conversation = normalizedHistory.map(item => `${item.role === "user" ? "User" : "Assistant"}: ${item.text}`).join("\n");
+
+  if (!hasGeminiKey) {
+    return `Based on the laws currently loaded, compare status, jurisdiction, and who is affected. ${userSituation ? `Given your situation, focus on eligibility, costs, and deadlines. ` : ""}Ask about one law at a time for the clearest answer.`;
+  }
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: `You are an AI Civic Assistant.
+    ${userSituation ? `The user's situation is: "${userSituation}".` : ""}
+    Use these laws as context: ${JSON.stringify(context.map(l => ({ id: l.id, title: l.title, summary: l.simplifiedSummary, impact: l.impact, status: l.status })))}.
     Conversation so far:
     ${conversation}
     Assistant:`,
   });
+
   return response.text || "I'm sorry, I couldn't process that request.";
 }
 
 export async function translateContent(text: string, targetLanguage: string): Promise<string> {
-  const model = "gemini-3-flash-preview";
-  const response = await ai.models.generateContent({
-    model,
-    contents: `Translate the following text into ${targetLanguage}: "${text}"`,
-  });
-  return response.text || text;
+  if (targetLanguage === "English") return text;
+  try {
+    const response = await axios.post("/api/ai/translate", { text, targetLanguage });
+    return response.data?.translation || text;
+  } catch {
+    return text;
+  }
 }
 
 export async function compareLawsWithAI(law1: Law, law2: Law): Promise<string> {
-  const model = "gemini-3-flash-preview";
   const prompt = `Compare the following two laws and provide a concise analysis of their key differences, potential conflicts, and unique impacts.
-  
   Law 1: ${law1.title}
   Summary 1: ${law1.simplifiedSummary}
   Impact 1: ${law1.impact}
-  
   Law 2: ${law2.title}
   Summary 2: ${law2.simplifiedSummary}
-  Impact 2: ${law2.impact}
-  
-  Provide the analysis in a single paragraph, focusing on what a regular citizen needs to know about how these two pieces of legislation differ or interact.`;
+  Impact 2: ${law2.impact}`;
+
   if (!hasGeminiKey) {
-    return `${law1.title} and ${law2.title} both affect ${law1.category === law2.category ? law1.category.toLowerCase() : "related policy areas"}, but they differ in scope, status, and jurisdiction. Compare the implementation dates, who is covered, and whether one creates obligations that the other relaxes or expands. Residents should watch for timeline mismatches or conflicting compliance requirements.`;
+    return `${law1.title} and ${law2.title} affect ${law1.category === law2.category ? law1.category.toLowerCase() : "related policy areas"}, but they differ in scope, status, and jurisdiction. Compare implementation dates, who is covered, and whether one expands or limits obligations created by the other.`;
   }
 
   const response = await ai.models.generateContent({
-    model,
+    model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
-    }
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+    },
   });
 
   return response.text || "Unable to generate comparative analysis at this time.";
@@ -523,15 +490,16 @@ export async function moderateComment(text: string): Promise<{ approved: boolean
   return { approved: true };
 }
 
+function fallbackVotingRecord(laws: Law[], stance: RepresentativeVoteRecord["stance"]): RepresentativeVoteRecord[] {
+  return laws.slice(0, 3).map(law => ({
+    billTitle: law.title,
+    stance,
+    note: `Tracking ${law.category.toLowerCase()} implications for constituents.`,
+  }));
+}
+
 export function getRepresentativesForLocation(state: string, laws: Law[]): Representative[] {
   const topBills = laws.slice(0, 3).map(law => law.id);
-  const votingRecord = (party: string): RepresentativeVoteRecord[] =>
-    laws.slice(0, 3).map(law => ({
-      billTitle: law.title,
-      stance: party === "Democrat" ? "support" : party === "Republican" ? "watching" : "support",
-      note: `Tracking ${law.category.toLowerCase()} implications for constituents.`,
-    }));
-
   const byState: Record<string, Representative[]> = {
     California: [
       {
@@ -545,50 +513,10 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.padilla.senate.gov"],
         channels: [{ type: "Twitter", id: "AlexPadilla4CA" }],
         sponsoredBills: topBills,
-        votingRecord: votingRecord("Democrat"),
-      },
-      {
-        id: "ca-sen-schiff",
-        name: "Adam Schiff",
-        office: "U.S. Senator",
-        party: "Democrat",
-        photoUrl: "https://www.congress.gov/img/member/s001150_200.jpg",
-        emails: ["https://www.schiff.senate.gov/contact/"],
-        phones: ["(202) 224-3841"],
-        urls: ["https://www.schiff.senate.gov"],
-        channels: [{ type: "Twitter", id: "SenAdamSchiff" }],
-        sponsoredBills: topBills,
-        votingRecord: votingRecord("Democrat"),
-      },
-    ],
-    Texas: [
-      {
-        id: "tx-sen-cornyn",
-        name: "John Cornyn",
-        office: "U.S. Senator",
-        party: "Republican",
-        photoUrl: "https://www.congress.gov/img/member/c001056_200.jpg",
-        phones: ["(202) 224-2934"],
-        urls: ["https://www.cornyn.senate.gov"],
-        channels: [{ type: "Twitter", id: "JohnCornyn" }],
-        sponsoredBills: topBills,
-        votingRecord: votingRecord("Republican"),
+        votingRecord: fallbackVotingRecord(laws, "support"),
       },
     ],
     "North Carolina": [
-      {
-        id: "nc-rep-jackson",
-        name: "Jeff Jackson",
-        office: "U.S. Representative",
-        party: "Democrat",
-        photoUrl: "https://www.congress.gov/img/member/j000308_200.jpg",
-        emails: ["contact@jackson.house.gov"],
-        phones: ["(202) 225-5634"],
-        urls: ["https://jeffjackson.house.gov"],
-        channels: [{ type: "Twitter", id: "JeffJacksonNC" }],
-        sponsoredBills: topBills,
-        votingRecord: votingRecord("Democrat"),
-      },
       {
         id: "nc-sen-tillis",
         name: "Thom Tillis",
@@ -600,24 +528,37 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.tillis.senate.gov"],
         channels: [{ type: "Twitter", id: "SenThomTillis" }],
         sponsoredBills: topBills,
-        votingRecord: votingRecord("Republican"),
+        votingRecord: fallbackVotingRecord(laws, "watching"),
       },
     ],
   };
+  return byState[state] || [{
+    id: `${state.toLowerCase().replace(/\s+/g, "-")}-rep-1`,
+    name: `${state} Civic Office`,
+    office: "State Legislative Contact",
+    party: "Nonpartisan",
+    urls: ["https://www.usa.gov/elected-officials"],
+    sponsoredBills: topBills,
+    votingRecord: fallbackVotingRecord(laws, "watching"),
+  }];
+}
 
-  return byState[state] || [
-    {
-      id: `${state.toLowerCase().replace(/\s+/g, "-")}-rep-1`,
-      name: `${state} Civic Office`,
-      office: "State Legislative Contact",
-      party: "Nonpartisan",
-      urls: ["https://www.usa.gov/elected-officials"],
-      sponsoredBills: topBills,
-      votingRecord: laws.slice(0, 2).map(law => ({
-        billTitle: law.title,
-        stance: "watching",
-        note: "Official voting data requires an external legislative source.",
-      })),
-    },
-  ];
+export async function fetchRepresentativesForAddress(address: string, state: string, laws: Law[]): Promise<Representative[]> {
+  try {
+    const response = await axios.get("/api/civic/representatives", { params: { address } });
+    return Array.isArray(response.data?.representatives) && response.data.representatives.length > 0
+      ? response.data.representatives
+      : getRepresentativesForLocation(state, laws);
+  } catch {
+    return getRepresentativesForLocation(state, laws);
+  }
+}
+
+export async function fetchHearingsForLocation(state: string, city: string): Promise<HearingEvent[]> {
+  try {
+    const response = await axios.get("/api/hearings", { params: { state, city } });
+    return Array.isArray(response.data?.hearings) ? response.data.hearings : [];
+  } catch {
+    return [];
+  }
 }
