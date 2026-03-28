@@ -28,7 +28,8 @@ import {
   ShieldCheck,
   History,
   BarChart3,
-  XCircle
+  XCircle,
+  UsersRound
 } from 'lucide-react';
 import Header from './components/Header';
 import LocationSelector from './components/LocationSelector';
@@ -40,6 +41,7 @@ import RoadmapView from './components/RoadmapView';
 import AnalyticsView from './components/AnalyticsView';
 import RepresentativeCard from './components/RepresentativeCard';
 import AILawyer from './components/AILawyer';
+import CommunityView from './components/CommunityView';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
 import { fetchLaws } from './services/geminiService';
 
@@ -69,7 +71,7 @@ export default function App() {
   const [laws, setLaws] = useState<Law[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics' | 'resources'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics' | 'community'>('feed');
   const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'county' | 'city'>('all');
   const [interestFilter, setInterestFilter] = useState<string>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -424,9 +426,9 @@ export default function App() {
             { id: 'map', icon: Map, label: 'MAP VIEW' },
             { id: 'digest', icon: Zap, label: 'WEEKLY DIGEST' },
             { id: 'profile', icon: UserIcon, label: 'MY PROFILE' },
-            { id: 'roadmap', icon: History, label: 'ROADMAP' },
             { id: 'analytics', icon: BarChart3, label: 'ANALYTICS' },
-            { id: 'resources', icon: Bookmark, label: 'RESOURCES' },
+            { id: 'community', icon: UsersRound, label: 'COMMUNITY' },
+            { id: 'roadmap', icon: History, label: 'ROADMAP' },
           ].map(tab => (
             <button 
               key={tab.id}
@@ -774,7 +776,7 @@ export default function App() {
                         PRIMARY: #{primaryInterest.toUpperCase()}
                       </div>
                     )}
-                    {['Housing', 'Labor', 'Education'].map(topic => (
+                    {['Housing', 'Labor', 'Education', 'Immigration', 'Health'].map(topic => (
                       <button 
                         key={topic}
                         onClick={() => setInterestFilter(topic.toLowerCase())}
@@ -1046,47 +1048,19 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'resources' && (
+            {activeTab === 'community' && (
               <motion.div 
-                key="resources"
+                key="community"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
               >
-                <div className="space-y-10">
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Resources</h2>
-                      <p className="mt-2 font-bold text-slate-400">Helpful links and documentation to navigate civic life.</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
-                    <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/50">
-                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-                        <Bookmark size={24} />
-                      </div>
-                      <h3 className="text-xl font-black text-indigo-950">Voter Registration</h3>
-                      <p className="mt-2 text-sm font-bold text-slate-500">Check your registration status or register to vote in your state.</p>
-                      <button className="mt-6 font-black text-indigo-600 hover:underline">Access Portal →</button>
-                    </div>
-                    <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/50">
-                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                        <Info size={24} />
-                      </div>
-                      <h3 className="text-xl font-black text-indigo-950">Legal Aid Clinics</h3>
-                      <p className="mt-2 text-sm font-bold text-slate-500">Find free or low-cost legal assistance programs near you.</p>
-                      <button className="mt-6 font-black text-emerald-600 hover:underline">Find Clinics →</button>
-                    </div>
-                    <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 shadow-xl shadow-slate-200/50">
-                      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-                        <MessageSquare size={24} />
-                      </div>
-                      <h3 className="text-xl font-black text-indigo-950">Town Hall Schedules</h3>
-                      <p className="mt-2 text-sm font-bold text-slate-500">Upcoming public meetings and town halls with your representatives.</p>
-                      <button className="mt-6 font-black text-amber-600 hover:underline">View Calendar →</button>
-                    </div>
-                  </div>
-                </div>
+                <CommunityView
+                  state={settings.location.state}
+                  city={settings.location.city}
+                  user={user}
+                  userProfile={userProfile}
+                />
               </motion.div>
             )}
 

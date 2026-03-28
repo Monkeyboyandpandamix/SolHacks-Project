@@ -157,3 +157,26 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
 }
+
+export interface CommunityEvent {
+  id: string;
+  title: string;
+  startDate: string;
+  venue?: string;
+  organizer?: string;
+  description: string;
+  url?: string;
+  category?: string;
+}
+
+export interface CommunityResource {
+  id: string;
+  name: string;
+  category: 'translator' | 'shelter' | 'legal' | 'immigration';
+  description: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  languages?: string[];
+  hours?: string;
+}

@@ -157,6 +157,118 @@ async function generateAiText(prompt: string): Promise<string | null> {
   return response.text || null;
 }
 
+function normalizeLocationLabel(state: string, city: string) {
+  return city?.trim() ? `${city}, ${state}` : state;
+}
+
+function fallbackCommunityEvents(state: string, city: string) {
+  const locationLabel = normalizeLocationLabel(state, city);
+  const now = Date.now();
+  return [
+    {
+      id: `${state}-${city}-townhall`,
+      title: `${locationLabel} Community Town Hall`,
+      startDate: new Date(now + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      venue: `${city || state} Civic Center`,
+      organizer: 'City Community Office',
+      description: `A public conversation covering neighborhood concerns, service updates, and local policy changes affecting residents in ${locationLabel}.`,
+      url: `https://www.google.com/search?q=${encodeURIComponent(`${locationLabel} town hall`)}`,
+      category: 'Town Hall',
+    },
+    {
+      id: `${state}-${city}-clinic`,
+      title: `${locationLabel} Legal and Benefits Clinic`,
+      startDate: new Date(now + 4 * 24 * 60 * 60 * 1000).toISOString(),
+      venue: `${city || state} Public Library`,
+      organizer: 'Community Legal Partners',
+      description: 'Walk-in support for benefits questions, immigration paperwork, translation referrals, and legal aid intake.',
+      url: `https://www.google.com/search?q=${encodeURIComponent(`${locationLabel} legal aid clinic`)}`,
+      category: 'Support Clinic',
+    },
+  ];
+}
+
+function fallbackCommunityResources(
+  state: string,
+  city: string,
+  category: 'translator' | 'shelter' | 'legal' | 'immigration',
+) {
+  const locationLabel = normalizeLocationLabel(state, city);
+  const fallbackByCategory = {
+    translator: [
+      {
+        id: `${state}-${city}-211-language`,
+        name: '211 Language Access Help',
+        category: 'translator',
+        description: `Call 211 to ask for interpretation, multilingual navigation, and language-access referrals serving ${locationLabel}.`,
+        phone: '211',
+        website: 'https://www.211.org',
+        languages: ['English', 'Spanish', 'Multiple languages via interpreter'],
+      },
+      {
+        id: `${state}-${city}-findhello`,
+        name: 'FindHello Translation and Immigration Services',
+        category: 'translator',
+        description: `Search multilingual support programs, translation help, and newcomer services near ${locationLabel}.`,
+        website: `https://www.findhello.org/search/?query=${encodeURIComponent(locationLabel)}`,
+        languages: ['English', 'Spanish', 'Arabic', 'French'],
+      },
+    ],
+    shelter: [
+      {
+        id: `${state}-${city}-211-shelter`,
+        name: '211 Shelter and Emergency Housing',
+        category: 'shelter',
+        description: `24/7 housing and shelter referrals for people in crisis in and around ${locationLabel}.`,
+        phone: '211',
+        website: 'https://www.211.org',
+        hours: '24/7',
+      },
+      {
+        id: `${state}-${city}-homelessshelterdirectory`,
+        name: 'Homeless Shelter Directory',
+        category: 'shelter',
+        description: `Directory of nearby shelters, food pantries, and housing support programs for ${locationLabel}.`,
+        website: `https://www.homelessshelterdirectory.org/cgi-bin/id/city.cgi?city=${encodeURIComponent(city || state)}&state=${encodeURIComponent(state)}`,
+      },
+    ],
+    legal: [
+      {
+        id: `${state}-${city}-lawhelp`,
+        name: 'LawHelp Legal Aid Finder',
+        category: 'legal',
+        description: `Locate legal aid offices, self-help clinics, and attorneys serving low-income residents near ${locationLabel}.`,
+        website: 'https://www.lawhelp.org',
+      },
+      {
+        id: `${state}-${city}-aba`,
+        name: 'American Bar Association Free Legal Answers',
+        category: 'legal',
+        description: 'Ask civil legal questions online and find bar-sponsored attorney referral resources.',
+        website: 'https://abafreelegalanswers.org',
+      },
+    ],
+    immigration: [
+      {
+        id: `${state}-${city}-immadvocates`,
+        name: 'Immigration Advocates Network',
+        category: 'immigration',
+        description: `Nonprofit legal-service directory for immigration help that can be filtered to ${locationLabel}.`,
+        website: 'https://www.immigrationadvocates.org/nonprofit/legaldirectory/',
+      },
+      {
+        id: `${state}-${city}-uscis`,
+        name: 'USCIS Find Legal Services',
+        category: 'immigration',
+        description: 'Official federal directory for legal-service providers and immigration assistance.',
+        website: 'https://www.uscis.gov/avoid-scams/find-legal-services',
+      },
+    ],
+  } as const;
+
+  return fallbackByCategory[category];
+}
+
 function currentCongress() {
   const now = new Date();
   const year = now.getFullYear();
@@ -486,6 +598,132 @@ async function startServer() {
     } catch (error: any) {
       console.error("Hearing API Error:", error.message);
       res.json({ hearings: [] });
+    }
+  });
+
+  app.get("/api/community/events", async (req, res) => {
+    const state = String(req.query.state || "");
+    const city = String(req.query.city || "");
+    const meetupKey = process.env.MEETUP_API_KEY;
+    const locationLabel = normalizeLocationLabel(state, city);
+
+    try {
+      if (meetupKey) {
+        const meetupResponse = await axios.get("https://api.meetup.com/2/open_events", {
+          params: {
+            key: meetupKey,
+            sign: true,
+            country: "us",
+            state: STATE_CODES[state] || state,
+            city,
+            page: 10,
+            time: `${Date.now()},${Date.now() + 21 * 24 * 60 * 60 * 1000}`,
+          },
+          timeout: 10000,
+        });
+
+        const meetupEvents = Array.isArray(meetupResponse.data?.results)
+          ? meetupResponse.data.results.map((event: any) => ({
+              id: String(event.id || `${event.name}-${event.time}`),
+              title: String(event.name || "Community event"),
+              startDate: new Date(Number(event.time || Date.now())).toISOString(),
+              venue: event.venue?.name || event.venue?.address_1 || locationLabel,
+              organizer: event.group?.name || "Meetup",
+              description: String(event.description || event.how_to_find_us || `Upcoming community event in ${locationLabel}.`).replace(/<[^>]+>/g, ' '),
+              url: event.event_url,
+              category: event.group?.category?.name || 'Meetup',
+            }))
+          : [];
+
+        if (meetupEvents.length > 0) {
+          return res.json({ events: meetupEvents });
+        }
+      }
+
+      if (ai) {
+        const events = await generateAiJson<any[]>({
+          prompt: `Find 6 to 10 real upcoming community events for ${locationLabel} in the United States.
+Prioritize town halls, public meetings, mutual-aid gatherings, immigration clinics, health fairs, translation support events, legal clinics, and neighborhood meetups.
+Use Google Search to find live event details.
+Return JSON only.`,
+          schema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                title: { type: Type.STRING },
+                startDate: { type: Type.STRING },
+                venue: { type: Type.STRING },
+                organizer: { type: Type.STRING },
+                description: { type: Type.STRING },
+                url: { type: Type.STRING },
+                category: { type: Type.STRING },
+              },
+              required: ["id", "title", "startDate", "description"],
+            },
+          },
+          tools: [{ googleSearch: {} }],
+        });
+
+        if (Array.isArray(events) && events.length > 0) {
+          return res.json({ events });
+        }
+      }
+
+      res.json({ events: fallbackCommunityEvents(state, city) });
+    } catch (error: any) {
+      console.error("Community events error:", error.message);
+      res.json({ events: fallbackCommunityEvents(state, city) });
+    }
+  });
+
+  app.get("/api/community/resources", async (req, res) => {
+    const state = String(req.query.state || "");
+    const city = String(req.query.city || "");
+    const category = String(req.query.category || "translator") as "translator" | "shelter" | "legal" | "immigration";
+    const locationLabel = normalizeLocationLabel(state, city);
+
+    try {
+      if (ai) {
+        const resources = await generateAiJson<any[]>({
+          prompt: `Find 5 to 8 real nearby ${category} resources for ${locationLabel} in the United States.
+Return only organizations, offices, clinics, or directories that are useful for a resident seeking immediate help.
+For "legal", prioritize legal aid and lawyers.
+For "immigration", prioritize immigration legal services, immigrant welcome centers, and newcomer support.
+For "translator", prioritize interpreters, multilingual support centers, and language access services.
+For "shelter", prioritize shelters, emergency housing, and housing crisis services.
+Use Google Search and return JSON only.`,
+          schema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                name: { type: Type.STRING },
+                category: { type: Type.STRING, enum: ["translator", "shelter", "legal", "immigration"] },
+                description: { type: Type.STRING },
+                address: { type: Type.STRING },
+                phone: { type: Type.STRING },
+                website: { type: Type.STRING },
+                languages: { type: Type.ARRAY, items: { type: Type.STRING } },
+                hours: { type: Type.STRING },
+              },
+              required: ["id", "name", "category", "description"],
+            },
+          },
+          tools: [{ googleSearch: {} }],
+        });
+
+        if (Array.isArray(resources) && resources.length > 0) {
+          return res.json({ resources });
+        }
+      }
+
+      res.json({ resources: fallbackCommunityResources(state, city, category) });
+    } catch (error: any) {
+      console.error("Community resources error:", error.message);
+      res.json({ resources: fallbackCommunityResources(state, city, category) });
     }
   });
 

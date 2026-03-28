@@ -1,10 +1,9 @@
 {
-  "projectId": "ai-resume-805e4",
-  "appId": "1:569995385864:web:91c5c6aa32134b589b45bd",
-  "apiKey": "AIzaSyDoV_i2rpB2IiYeMga8ZokWpivUbgLOqp0",
-  "authDomain": "ai-resume-805e4.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-d2f11b93-1144-4e5d-aba2-e9bbb76b0006",
-  "storageBucket": "ai-resume-805e4.firebasestorage.app",
-  "messagingSenderId": "569995385864",
-  "measurementId": "G-V433PG0X1V"
+  "apiKey": "AIzaSyCkBw8iXizvcyfwW0BsRxBXbEwoCbK4z6Q",
+  "authDomain": "solhack-7d8a0.firebaseapp.com",
+  "projectId": "solhack-7d8a0",
+  "storageBucket": "solhack-7d8a0.firebasestorage.app",
+  "messagingSenderId": "515231650980",
+  "appId": "1:515231650980:web:5fa631979cf603896d8231",
+  "measurementId": "G-5DQJ9G3Q9P"
 }
