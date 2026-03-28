@@ -91,6 +91,13 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
     city: "bg-sky-50 text-sky-700 border-sky-200",
   };
 
+  const levelLabels = {
+    federal: "Federal",
+    state: "State",
+    county: "County",
+    city: "City",
+  };
+
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
@@ -138,7 +145,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-white shadow-sm">
                 {levelIcons[law.level]}
               </div>
-              {law.level}
+              {levelLabels[law.level]}
             </div>
           </div>
           <div className="flex gap-2">

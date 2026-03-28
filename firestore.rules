@@ -63,7 +63,7 @@ service cloud.firestore {
     match /laws_cache/{cacheId} {
       allow read: if true;
       allow create, update: if isValidLawsCache(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if true;
     }
 
     match /users/{uid} {

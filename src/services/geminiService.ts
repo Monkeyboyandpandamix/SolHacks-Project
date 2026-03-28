@@ -105,6 +105,77 @@ function normalizeText(value?: string) {
     .trim();
 }
 
+function isValidSourceUrl(value?: string) {
+  return Boolean(value && /^https?:\/\//i.test(value));
+}
+
+function normalizeSourceUrl(value?: string) {
+  if (!value) return value;
+
+  try {
+    const url = new URL(value);
+
+    if (url.hostname === "api.congress.gov") {
+      const parts = url.pathname.split("/").filter(Boolean);
+      const billIndex = parts.indexOf("bill");
+      if (billIndex >= 0 && parts.length >= billIndex + 4) {
+        const congress = parts[billIndex + 1];
+        const billType = parts[billIndex + 2];
+        const number = parts[billIndex + 3];
+        return `https://www.congress.gov/bill/${congress}th-congress/${billType.toLowerCase()}-bill/${number}`;
+      }
+      return "https://www.congress.gov";
+    }
+
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function inferLevel(input: Partial<Law> & { id?: string; title?: string; sourceUrl?: string }): Law["level"] {
+  if (input.level) return input.level;
+
+  const source = (normalizeSourceUrl(input.sourceUrl) || "").toLowerCase();
+  const id = (input.id || "").toLowerCase();
+  const title = `${input.title || ""} ${input.originalText || ""} ${input.simplifiedSummary || ""}`.toLowerCase();
+
+  if (source.includes("openstates.org") || id.startsWith("ocd-bill/")) return "state";
+  if (source.includes("congress.gov") || source.includes("federalregister.gov") || source.includes("govinfo.gov") || /^fed-|^fr-|^doc-/.test(id)) return "federal";
+  if (/\bcounty\b|\bcommissioners\b/.test(title)) return "county";
+  if (/\bcity\b|\bcouncil\b|\bmunicipal\b|\bordinance\b/.test(title)) return "city";
+  return "state";
+}
+
+function toPublicCongressUrl(bill: any) {
+  const congress = bill.congress || bill.congressNumber;
+  const type = (bill.type || bill.billType || "").toLowerCase();
+  const number = bill.number || bill.billNumber;
+
+  if (congress && type && number) {
+    return `https://www.congress.gov/bill/${congress}th-congress/${type}-bill/${number}`;
+  }
+
+  if (typeof bill.url === "string" && bill.url.includes("api.congress.gov")) {
+    return undefined;
+  }
+
+  return bill.url;
+}
+
+function isLikelyPlaceholderLaw(law: Partial<Law>) {
+  const title = normalizeText(law.title);
+  const summary = normalizeText(law.simplifiedSummary || law.originalText || "");
+  return (
+    title.includes("policy watch") ||
+    title.includes("capitol update") ||
+    title.includes("action briefing") ||
+    title.includes("ordinance tracker") ||
+    summary.includes("being tracked here") ||
+    summary.includes("is being surfaced here while upstream bill data is limited")
+  );
+}
+
 function canonicalLawKey(input: Partial<Law> & { id?: string; title?: string }) {
   const sourcePart = normalizeText(input.sourceUrl);
   if (sourcePart) return `source:${sourcePart}`;
@@ -129,6 +200,10 @@ function dedupeLaws(laws: Law[], state: string, city: string): Law[] {
   const byKey = new Map<string, Law>();
 
   for (const current of laws) {
+    if (!isValidSourceUrl(current.sourceUrl) || isLikelyPlaceholderLaw(current)) {
+      continue;
+    }
+
     const prepared = createLawFromRaw(current as Partial<Law> & { id: string; title: string }, state, city);
     const key = canonicalLawKey(prepared);
     const existing = byKey.get(key);
@@ -232,13 +307,13 @@ function createLawFromRaw(input: Partial<Law> & { id: string; title: string; sum
     simplifiedSummary: input.simplifiedSummary || input.summary || `${input.title} is a ${status} measure relevant to residents of ${city}, ${state}. It has been added to your feed based on its likely impact. Open the source to review the official language.`,
     impact: input.impact || `This ${category.toLowerCase()} measure may affect costs, services, or obligations for people living in ${city}. Monitor status changes and hearing notices if it matches your priorities.`,
     category,
-    level: input.level || "state",
+    level: inferLevel(input),
     status,
     location: { state, city },
     date: input.date || new Date().toLocaleDateString(),
     votes,
     comments: input.comments || [],
-    sourceUrl: input.sourceUrl,
+    sourceUrl: normalizeSourceUrl(input.sourceUrl),
     timeline,
     glossary: input.glossary || buildGlossary(category),
     personalImpact: input.personalImpact || input.impact,
@@ -265,7 +340,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
       summary: bill.latestAction?.text || bill.summary?.text || "Recent federal legislation update.",
       level: "federal",
       date: bill.updateDate || bill.latestAction?.actionDate,
-      sourceUrl: bill.url,
+      sourceUrl: toPublicCongressUrl(bill),
       status: inferStatus(bill.latestAction?.text),
     }, state, city));
   });
@@ -283,14 +358,26 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
   });
 
   stateBills.forEach((bill: any, index: number) => {
+    const summary =
+      bill.abstracts?.[0]?.abstract ||
+      bill.extras?._summary ||
+      bill.extras?.impact_clause ||
+      bill.latest_action_description ||
+      "Recent state legislation update.";
+    const sourceUrl =
+      bill.sources?.[0]?.url ||
+      bill.openstatesUrl ||
+      bill.openstates_url ||
+      bill.sources?.[0]?.link;
+
     laws.push(createLawFromRaw({
       id: bill.identifier || bill.id || `STATE-${index}`,
       title: bill.title || bill.identifier || "State legislation update",
-      summary: bill.abstracts?.[0]?.abstract || bill.extras?._summary || "Recent state legislation update.",
+      summary,
       level: "state",
-      date: bill.updatedAt || bill.createdAt,
-      sourceUrl: bill.sources?.[0]?.url || bill.openstatesUrl,
-      status: inferStatus(bill.classification?.join(" ") || bill.latestActionDescription),
+      date: bill.updatedAt || bill.updated_at || bill.createdAt || bill.created_at,
+      sourceUrl,
+      status: inferStatus(bill.classification?.join(" ") || bill.latestActionDescription || bill.latest_action_description),
     }, state, city));
   });
 
@@ -321,37 +408,8 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
   return ensureJurisdictionCoverage(laws, state, city);
 }
 
-function ensureJurisdictionCoverage(laws: Law[], state: string, city: string): Law[] {
-  const coveredLevels = new Set(laws.map((law) => law.level));
-  const seed = laws[0];
-
-  const createSynthetic = (level: Law["level"], suffix: string, summary: string) => createLawFromRaw({
-    id: `${level}-${state.toLowerCase().replace(/\s+/g, "-")}-${city.toLowerCase().replace(/\s+/g, "-")}`,
-    title: `${city} ${suffix}`,
-    summary,
-    category: seed?.category || "Civic",
-    level,
-    status: "updated",
-    date: new Date().toLocaleDateString(),
-    sourceUrl: seed?.sourceUrl,
-  }, state, city);
-
-  const ensured = [...laws];
-
-  if (!coveredLevels.has("federal")) {
-    ensured.push(createSynthetic("federal", "Federal Policy Watch", `Federal measures affecting ${city}, ${state} are being tracked here so national policy changes remain visible in your feed.`));
-  }
-  if (!coveredLevels.has("state")) {
-    ensured.push(createSynthetic("state", "State Capitol Update", `State-level legislation affecting residents of ${city} is being surfaced here while upstream bill data is limited.`));
-  }
-  if (!coveredLevels.has("county")) {
-    ensured.push(createSynthetic("county", "County Action Briefing", `County-level hearings, ordinances, and service changes relevant to ${city} are summarized here so county policy is not missed.`));
-  }
-  if (!coveredLevels.has("city")) {
-    ensured.push(createSynthetic("city", "City Ordinance Tracker", `Local city ordinances and municipal rule changes affecting ${city} are summarized here for quick review.`));
-  }
-
-  return ensured;
+function ensureJurisdictionCoverage(laws: Law[], _state: string, _city: string): Law[] {
+  return laws.filter((law) => isValidSourceUrl(law.sourceUrl) && !isLikelyPlaceholderLaw(law));
 }
 
 function enrichLaws(laws: Law[], state: string, city: string): Law[] {
@@ -425,9 +483,16 @@ async function postAi<T>(url: string, payload: unknown): Promise<T | null> {
   }
 }
 
-export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string, primaryInterest: string = "all"): Promise<Law[]> {
+export async function fetchLaws(
+  state: string,
+  city: string,
+  language: string = "English",
+  userSituation?: string,
+  primaryInterest: string = "all",
+): Promise<{ laws: Law[]; warnings: string[] }> {
 
   const rawData: any = { federal: null, federalRegister: null, state: null, documents: null, scraped: null };
+  const warnings: string[] = [];
 
   try {
     const [fedRes, federalRegisterRes, stateRes, docRes, scrapeRes] = await Promise.allSettled([
@@ -440,7 +505,16 @@ export async function fetchLaws(state: string, city: string, language: string = 
 
     if (fedRes.status === "fulfilled") rawData.federal = fedRes.value.data;
     if (federalRegisterRes.status === "fulfilled") rawData.federalRegister = federalRegisterRes.value.data;
-    if (stateRes.status === "fulfilled") rawData.state = stateRes.value.data;
+    if (stateRes.status === "fulfilled") {
+      rawData.state = stateRes.value.data;
+      if (stateRes.value.data?.meta?.rateLimited) {
+        warnings.push(
+          stateRes.value.data?.meta?.cached
+            ? `State legislation for ${state} is temporarily rate-limited, so cached state results are being used.`
+            : `State legislation for ${state} is temporarily rate-limited by OpenStates. Try again in about a minute.`,
+        );
+      }
+    }
     if (docRes.status === "fulfilled") rawData.documents = docRes.value.data;
     if (scrapeRes.status === "fulfilled") rawData.scraped = scrapeRes.value.data;
   } catch (e) {
@@ -456,7 +530,10 @@ export async function fetchLaws(state: string, city: string, language: string = 
     const bMatches = b.category.toLowerCase().includes(primaryInterest.toLowerCase()) ? 1 : 0;
     return bMatches - aMatches;
   });
-  return applyTranslationToLaws(prioritized, language);
+  return {
+    laws: await applyTranslationToLaws(prioritized, language),
+    warnings,
+  };
 }
 
 export async function generateAdvocacyLetter(law: Law, stance: "support" | "oppose", userSituation?: string): Promise<string> {

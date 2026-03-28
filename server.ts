@@ -11,7 +11,8 @@ dotenv.config();
 
 const ai = process.env.GEMINI_API_KEY ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }) : null;
 const stateLegislationCache = new Map<string, { data: any; timestamp: number }>();
-const STATE_CACHE_TTL = 30 * 60 * 1000;
+const stateLegislationBackoff = new Map<string, number>();
+const STATE_CACHE_TTL = 6 * 60 * 60 * 1000;
 
 const CITY_DIRECTORY: Record<string, string[]> = {
   California: ["San Francisco", "San Diego", "San Jose", "Sacramento", "Oakland", "Los Angeles"],
@@ -495,34 +496,97 @@ async function startServer() {
   app.get("/api/legislation/state", async (req, res) => {
     try {
       const apiKey = process.env.OPENSTATES_API_KEY;
-      const { state } = req.query;
+      const state = String(req.query.state || "").trim();
       if (!apiKey) return res.status(500).json({ error: "OPENSTATES_API_KEY not configured" });
       if (!state) return res.status(400).json({ error: "State parameter is required" });
 
-      const cacheKey = String(state);
+      const cacheKey = state;
       const cached = stateLegislationCache.get(cacheKey);
+      const backoffUntil = stateLegislationBackoff.get(cacheKey) || 0;
+
+      if (backoffUntil > Date.now()) {
+        const retryAfterMs = backoffUntil - Date.now();
+        if (cached) {
+          return res.json({
+            ...cached.data,
+            meta: {
+              ...(cached.data?.meta || {}),
+              cached: true,
+              rateLimited: true,
+              retryAfterMs,
+            },
+          });
+        }
+        return res.json({
+          results: [],
+          meta: {
+            cached: false,
+            rateLimited: true,
+            retryAfterMs,
+          },
+        });
+      }
+
       if (cached && Date.now() - cached.timestamp < STATE_CACHE_TTL) {
-        return res.json(cached.data);
+        return res.json({
+          ...cached.data,
+          meta: {
+            ...(cached.data?.meta || {}),
+            cached: true,
+            rateLimited: false,
+          },
+        });
       }
 
       const response = await axios.get("https://v3.openstates.org/bills", {
-        params: { jurisdiction: state, sort: "updated_desc", per_page: 25, apikey: apiKey },
+        params: { jurisdiction: state, sort: "updated_desc", per_page: 20, apikey: apiKey },
         timeout: 15000,
       });
+      stateLegislationBackoff.delete(cacheKey);
       stateLegislationCache.set(cacheKey, {
-        data: response.data,
+        data: {
+          ...response.data,
+          meta: {
+            cached: false,
+            rateLimited: false,
+          },
+        },
         timestamp: Date.now(),
       });
-      res.json(response.data);
+      res.json({
+        ...response.data,
+        meta: {
+          cached: false,
+          rateLimited: false,
+        },
+      });
     } catch (error: any) {
-      console.error("Open States API Error:", error.message);
+      console.error("Open States API Error:", error.response?.data || error.message);
       if (axios.isAxiosError(error) && error.response?.status === 429) {
         const cacheKey = String(req.query.state || "");
+        const retryAfterHeader = Number(error.response.headers?.["retry-after"]);
+        const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader * 1000 : 60 * 1000;
+        stateLegislationBackoff.set(cacheKey, Date.now() + retryAfterMs);
         const cached = stateLegislationCache.get(cacheKey);
         if (cached) {
-          return res.json(cached.data);
+          return res.json({
+            ...cached.data,
+            meta: {
+              ...(cached.data?.meta || {}),
+              cached: true,
+              rateLimited: true,
+              retryAfterMs,
+            },
+          });
         }
-        return res.json({ results: [] });
+        return res.json({
+          results: [],
+          meta: {
+            cached: false,
+            rateLimited: true,
+            retryAfterMs,
+          },
+        });
       }
       res.status(500).json({ error: "Failed to fetch state legislation" });
     }
@@ -762,7 +826,7 @@ Use Google Search and return JSON only.`,
 
     try {
       const laws = await generateAiJson<any[]>({
-        prompt: `You are a civic information expert. Return 15 to 30 recent or significant laws, bills, or ordinances that affect daily life for a resident of ${city ? `${city}, ${state}` : state}.
+        prompt: `You are a civic information expert. Return only real, source-backed laws, bills, or ordinances that affect daily life for a resident of ${city ? `${city}, ${state}` : state}.
 ${userSituation ? `User situation: ${userSituation}. Prioritize direct relevance.` : ""}
 ${primaryInterest !== "all" ? `Primary interest: ${primaryInterest}. Rank laws in this area first while still including other important state and federal items.` : ""}
 Use this official raw data as your primary source:
@@ -770,7 +834,11 @@ Federal: ${JSON.stringify(rawData.federal)}
 State: ${JSON.stringify(rawData.state)}
 Documents: ${JSON.stringify(rawData.documents)}
 Scraped local/state data: ${JSON.stringify(rawData.scraped)}
-If the provided data is insufficient, use Google Search to fill gaps. Return JSON only.`,
+If the provided data is insufficient, use Google Search to fill gaps, but do not invent laws.
+Only include items with a real public source URL.
+Use the exact requested location. For local items, prefer ${city ? `${city}, ${state}` : state}; do not substitute another city.
+If there are only a few verified results, return only those few results.
+Return JSON only.`,
         schema: {
           type: Type.ARRAY,
           items: {
@@ -798,7 +866,7 @@ If the provided data is insufficient, use Google Search to fill gaps. Return JSO
               date: { type: Type.STRING },
               sourceUrl: { type: Type.STRING },
             },
-            required: ["id", "title", "originalText", "simplifiedSummary", "impact", "category", "level", "status", "date"],
+            required: ["id", "title", "originalText", "simplifiedSummary", "impact", "category", "level", "status", "date", "sourceUrl"],
           },
         },
         tools: [{ googleSearch: {} }],

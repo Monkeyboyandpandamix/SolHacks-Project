@@ -46,7 +46,7 @@ import { Law, UserSettings, Notification, Comment, UserProfile, Representative }
 import { fetchLaws, mergeCanonicalLaws } from './services/geminiService';
 
 import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
-import { collection, doc, getDoc, setDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, setDoc, getDocs, Timestamp } from 'firebase/firestore';
 
 function sanitizeForFirestore<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -61,6 +61,13 @@ function sanitizeForFirestore<T>(value: T): T {
   }
 
   return value;
+}
+
+function buildLegacyCachePrefixes(state: string, city: string, language: string) {
+  return [
+    `v2_${state}_${city}_${language}_`,
+    `v3_${state}_${city}_${language}`,
+  ];
 }
 
 export default function App() {
@@ -167,6 +174,8 @@ export default function App() {
       let cachedLaws: Law[] = [];
       let cacheLastUpdated = 0;
       const CACHE_LIMIT = 4 * 60 * 60 * 1000; // 4 hours
+      const legacyPrefixes = buildLegacyCachePrefixes(settings.location.state, settings.location.city, settings.language);
+      const staleCacheRefs: Array<ReturnType<typeof doc>> = [];
 
       try {
         const cacheDoc = await getDoc(cacheRef);
@@ -183,19 +192,65 @@ export default function App() {
         console.warn("Failed to read Firestore cache", cacheReadErr);
       }
 
+      if (cachedLaws.length === 0) {
+        try {
+          const legacySnapshot = await getDocs(collection(db, 'laws_cache'));
+          const legacyDocs = legacySnapshot.docs.filter((entry) =>
+            entry.id !== cacheKey && legacyPrefixes.some((prefix) => entry.id.startsWith(prefix)),
+          );
+
+          if (legacyDocs.length > 0) {
+            const legacyMerged = legacyDocs.reduce<Law[]>((accumulator, entry) => {
+              const entryLaws = Array.isArray(entry.data().laws) ? entry.data().laws as Law[] : [];
+              staleCacheRefs.push(entry.ref);
+              return mergeCanonicalLaws(accumulator, entryLaws, settings.location.state, settings.location.city);
+            }, []);
+
+            if (legacyMerged.length > 0) {
+              cachedLaws = mergeCanonicalLaws(cachedLaws, legacyMerged, settings.location.state, settings.location.city);
+              data = cachedLaws;
+
+              await setDoc(cacheRef, {
+                laws: sanitizeForFirestore(cachedLaws),
+                lastUpdated: new Date().toISOString()
+              });
+
+              await Promise.all(staleCacheRefs.map((staleRef) => deleteDoc(staleRef).catch((error) => {
+                console.warn("Failed to delete stale laws cache doc", staleRef.id, error);
+              })));
+            }
+          }
+        } catch (legacyCacheErr) {
+          console.warn("Failed to migrate legacy Firestore cache", legacyCacheErr);
+        }
+      }
+
       const now = new Date().getTime();
       const shouldRefresh = cachedLaws.length === 0 || now - cacheLastUpdated >= CACHE_LIMIT;
 
       // 2. If cache is missing or stale, fetch fresh laws and merge only new canonical entries
       if (shouldRefresh) {
         console.log("Fetching fresh laws from APIs");
-        const freshLaws = await fetchLaws(
+        const freshResult = await fetchLaws(
           settings.location.state, 
           settings.location.city, 
           settings.language,
           userProfile?.situation,
           'all'
         );
+        const freshLaws = freshResult.laws;
+
+        if (freshResult.warnings.length > 0) {
+          const warningNotifications = freshResult.warnings.map((message, index) => ({
+            id: `warning-${Date.now()}-${index}`,
+            title: 'State Feed Notice',
+            message,
+            date: new Date().toLocaleString(),
+            read: false,
+            type: 'update' as const,
+          }));
+          setNotifications((prev) => [...warningNotifications, ...prev].slice(0, 20));
+        }
 
         data = mergeCanonicalLaws(cachedLaws, freshLaws, settings.location.state, settings.location.city);
 
@@ -205,6 +260,12 @@ export default function App() {
               laws: sanitizeForFirestore(data),
               lastUpdated: new Date().toISOString()
             });
+
+            if (staleCacheRefs.length > 0) {
+              await Promise.all(staleCacheRefs.map((staleRef) => deleteDoc(staleRef).catch((error) => {
+                console.warn("Failed to delete stale laws cache doc", staleRef.id, error);
+              })));
+            }
           } catch (cacheErr) {
             console.warn("Failed to update Firestore cache", cacheErr);
             // Non-blocking error
