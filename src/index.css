@@ -48,3 +48,18 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-slate-300;
 }
+
+/* Accessibility Feature Overrides */
+html:has(body.large-font) {
+  font-size: 125%;
+}
+
+html:has(body.high-contrast) {
+  filter: invert(1) hue-rotate(180deg) contrast(1.5);
+  background-color: #fff;
+}
+
+html:has(body.high-contrast) img,
+html:has(body.high-contrast) video {
+  filter: invert(1) hue-rotate(180deg);
+}
