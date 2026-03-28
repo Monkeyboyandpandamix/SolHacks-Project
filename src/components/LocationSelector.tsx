@@ -82,8 +82,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
     "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", 
     "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", 
     "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", 
-    "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", 
-    "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming"
+    "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Puerto Rico", "Rhode Island", "South Carolina", 
+    "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "Washington D.C.", "West Virginia", "Wisconsin", "Wyoming"
   ];
 
   const languages = [
@@ -115,7 +115,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted">State</label>
+            <label className="text-xs font-medium text-muted">State/Territory</label>
             <select 
               value={state}
               onChange={(e) => setState(e.target.value)}
