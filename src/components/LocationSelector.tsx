@@ -122,6 +122,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
     { id: 'racial equity', label: 'Racial Equity' },
     { id: 'religious freedom', label: 'Religious Freedom' },
     { id: 'lgbtq+ rights', label: 'LGBTQ+ Rights' },
+    { id: 'refugee & asylum', label: 'Refugee & Asylum' },
     { id: 'voting access', label: 'Voting Access' },
     { id: 'international students', label: 'International Students' },
   ];

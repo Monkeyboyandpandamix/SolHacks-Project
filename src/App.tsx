@@ -64,6 +64,9 @@ const CULTURAL_FILTER_TOPICS = [
   'Arts & Culture Funding',
   'Racial Equity',
   'Religious Freedom',
+  'LGBTQ+ Rights',
+  'Refugee & Asylum',
+  'Voting Access',
 ];
 
 const HYBRID_FILTER_TOPICS = [...CORE_FILTER_TOPICS, ...CULTURAL_FILTER_TOPICS];

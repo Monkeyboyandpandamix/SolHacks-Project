@@ -91,14 +91,15 @@ const glossaryByCategory: Record<string, { term: string; definition: string }[]>
 
 function inferCategory(title: string, summary: string) {
   const haystack = `${title} ${summary}`.toLowerCase();
-  if (/(immigration|migrant|visa|citizen|daca|asylum|refugee|deport)/.test(haystack)) return "Immigration";
-  if (/(translation|translated|interpreter|multilingual|language access|english learner|limited english)/.test(haystack)) return "Language Access";
-  if (/(tribal|tribe|indigenous|native nation|sacred site|reservation|heritage land)/.test(haystack)) return "Indigenous Rights";
-  if (/(museum|arts?|artist|cultural institution|heritage center|humanities|historic preservation)/.test(haystack)) return "Arts & Culture Funding";
-  if (/(racial equity|civil rights|discrimination|bias|hate crime|equity assessment|minority)/.test(haystack)) return "Racial Equity";
-  if (/(religious freedom|faith|worship|church|mosque|synagogue|temple|religious accommodation)/.test(haystack)) return "Religious Freedom";
-  if (/(lgbtq|transgender|gender identity|sexual orientation|same-sex|queer)/.test(haystack)) return "LGBTQ+ Rights";
-  if (/(vote|voter|ballot|polling place|election access|redistricting)/.test(haystack)) return "Voting Access";
+  if (/(immigration|migrant|visa|citizen|daca|deport)/.test(haystack)) return "Immigration";
+  if (/(refugee|asylum|resettlement)/.test(haystack)) return "Refugee & Asylum";
+  if (/(language|translation|translated|interpreter|multilingual|linguistic|bilingual|language access|english learner|limited english)/.test(haystack)) return "Language Access";
+  if (/(tribal|tribe|indigenous|native american|native nation|sacred site|reservation|heritage land)/.test(haystack)) return "Indigenous Rights";
+  if (/(art|arts?|culture|museum|library|music|theater|creative|cultural institution|heritage center|humanities|historic preservation)/.test(haystack)) return "Arts & Culture Funding";
+  if (/(race|racial|equity|discrimination|bias|civil rights|diversity|inclusion|hate crime|minority)/.test(haystack)) return "Racial Equity";
+  if (/(religion|religious|faith|church|mosque|synagogue|temple|worship|chaplain|religious accommodation)/.test(haystack)) return "Religious Freedom";
+  if (/(lgbt|lgbtq|queer|gay|transgender|sexual orientation|gender identity|same-sex)/.test(haystack)) return "LGBTQ+ Rights";
+  if (/(vote|voting|ballot|election|polling|voter|redistricting)/.test(haystack)) return "Voting Access";
   if (/(international student|student visa|f-1|sevis|optional practical training|curricular practical training)/.test(haystack)) return "International Students";
   if (/(rent|tenant|housing|zoning|homeless)/.test(haystack)) return "Housing";
   if (/(wage|worker|employment|labor|union|leave)/.test(haystack)) return "Labor";
@@ -106,6 +107,7 @@ function inferCategory(title: string, summary: string) {
   if (/(health|medical|insurance|medicaid|mental health)/.test(haystack)) return "Health";
   if (/(climate|water|emission|environment|energy)/.test(haystack)) return "Environment";
   if (/(tax|budget|revenue|appropriation)/.test(haystack)) return "Taxes";
+  
   return "Civic";
 }
 
