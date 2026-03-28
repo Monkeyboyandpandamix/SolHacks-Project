@@ -1,6 +1,36 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bookmark, LayoutGrid, MessageSquare, Scale, LayoutDashboard, Map, User as UserIcon, MapPin, Bell, Settings, Search, Filter, ChevronRight, TrendingUp, Globe, Building2, Users, Zap, CheckCircle, AlertTriangle, ShieldCheck, History, BarChart3, XCircle, Languages } from 'lucide-react';
+import { 
+  Bookmark, 
+  LayoutGrid, 
+  MessageSquare, 
+  Info, 
+  AlertTriangle, 
+  Scale, 
+  LayoutDashboard, 
+  Map, 
+  User as UserIcon, 
+  MapPin, 
+  Bell, 
+  Settings,
+  Search,
+  Filter,
+  ChevronRight,
+  ChevronUp,
+  TrendingUp,
+  Globe,
+  Building2,
+  Users,
+  Zap,
+  CheckCircle,
+  AlertCircle,
+  Landmark,
+  ShieldCheck,
+  History,
+  BarChart3,
+  XCircle
+} from 'lucide-react';
+import Header from './components/Header';
 import LocationSelector from './components/LocationSelector';
 import LawFeed from './components/LawFeed';
 import LawCard from './components/LawCard';
@@ -10,13 +40,13 @@ import RoadmapView from './components/RoadmapView';
 import AnalyticsView from './components/AnalyticsView';
 import RepresentativeCard from './components/RepresentativeCard';
 import AILawyer from './components/AILawyer';
-import { BookmarkCollection, Comment, HearingEvent, Law, Notification, Representative, UserProfile, UserSettings } from './types';
-import { fetchHearingsForLocation, fetchLaws, fetchRepresentativesForAddress, moderateComment } from './services/geminiService';
+import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
+import { fetchLaws } from './services/geminiService';
+
 import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, setDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
 
 export default function App() {
-  const languageOptions = ['English', 'Spanish', 'Chinese', 'Tagalog', 'Vietnamese', 'Arabic', 'French', 'Korean', 'Russian'];
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
@@ -24,90 +54,153 @@ export default function App() {
     return saved ? JSON.parse(saved) : {
       highContrast: false,
       largeFont: false,
-      language: 'English',
-      location: { state: 'California', city: 'San Francisco' },
-      interests: [],
+      reduceMotion: false,
+      underlineLinks: false,
+      language: "English",
+      location: {
+        state: "California",
+        city: "San Francisco"
+      },
+      interests: []
     };
   });
+
   const [laws, setLaws] = useState<Law[]>([]);
-  const [representatives, setRepresentatives] = useState<Representative[]>([]);
-  const [hearingEvents, setHearingEvents] = useState<HearingEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics'>('feed');
-  const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'local' | 'county' | 'city'>('all');
+  const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'county' | 'city'>('all');
   const [interestFilter, setInterestFilter] = useState<string>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [lawsToCompare, setLawsToCompare] = useState<Law[]>([]);
-  const [selectedLawId, setSelectedLawId] = useState<string | null>(null);
-  const [bookmarkCollections, setBookmarkCollections] = useState<BookmarkCollection[]>(() => {
-    const saved = localStorage.getItem('civiclens_collections');
-    return saved ? JSON.parse(saved) : [{ id: 'default', name: 'My Civic Watchlist', lawIds: [] }];
-  });
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    // Keydown shortcut
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    // Scroll progress
+    const handleScroll = () => {
+      const totalScroll = document.documentElement.scrollTop;
+      const windowHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+      const scroll = windowHeight ? totalScroll / windowHeight : 0;
+      setScrollProgress(scroll);
+    };
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Auth Listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (!currentUser) {
-        setUserProfile(null);
-        return;
-      }
-      try {
-        const profileDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (profileDoc.exists()) {
-          setUserProfile(profileDoc.data() as UserProfile);
-        } else {
-          const newProfile: UserProfile = {
-            uid: currentUser.uid,
-            email: currentUser.email || '',
-            location: settings.location,
-            interests: settings.interests || [],
-            followedTopics: [],
-            lastUpdated: new Date().toISOString(),
-          };
-          await setDoc(doc(db, 'users', currentUser.uid), newProfile);
-          setUserProfile(newProfile);
+      if (currentUser) {
+        // Fetch or create profile
+        try {
+          const profileDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          if (profileDoc.exists()) {
+            setUserProfile(profileDoc.data() as UserProfile);
+          } else {
+            const newProfile: UserProfile = {
+              uid: currentUser.uid,
+              email: currentUser.email || '',
+              location: settings.location,
+              interests: settings.interests || [],
+              followedTopics: [],
+              lastUpdated: new Date().toISOString()
+            };
+            await setDoc(doc(db, 'users', currentUser.uid), newProfile);
+            setUserProfile(newProfile);
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}`);
         }
-      } catch (err) {
-        handleFirestoreError(err, OperationType.GET, `users/${currentUser.uid}`);
+      } else {
+        setUserProfile(null);
       }
     });
     return () => unsubscribe();
-  }, [settings.interests, settings.location]);
+  }, [settings.location, settings.interests]);
 
   const loadLaws = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
+      // 1. Check Cache in Firestore
       const cacheKey = `${settings.location.state}_${settings.location.city}_${settings.language}`;
-      const cacheValue = localStorage.getItem(`civiclens_cache_${cacheKey}`);
-      const cacheLimit = 4 * 60 * 60 * 1000;
+      const cacheRef = doc(db, 'laws_cache', cacheKey);
       let data: Law[] = [];
-      if (cacheValue) {
-        const parsed = JSON.parse(cacheValue);
-        if (Date.now() - new Date(parsed.lastUpdated || 0).getTime() < cacheLimit) {
-          data = parsed.laws || [];
+      const CACHE_LIMIT = 4 * 60 * 60 * 1000; // 4 hours
+
+      try {
+        const cacheDoc = await getDoc(cacheRef);
+        if (cacheDoc.exists()) {
+          const cacheData = cacheDoc.data();
+          const lastUpdated = new Date(cacheData.lastUpdated).getTime();
+          const now = new Date().getTime();
+          
+          if (now - lastUpdated < CACHE_LIMIT) {
+            console.log("Using cached laws from Firestore");
+            data = cacheData.laws;
+          }
         }
+      } catch (cacheReadErr) {
+        console.warn("Failed to read Firestore cache", cacheReadErr);
       }
+
+      // 2. If no cache or expired, fetch from APIs
       if (data.length === 0) {
-        data = await fetchLaws(settings.location.state, settings.location.city, settings.language, userProfile?.situation);
+        console.log("Fetching fresh laws from APIs");
+        data = await fetchLaws(
+          settings.location.state, 
+          settings.location.city, 
+          settings.language,
+          userProfile?.situation
+        );
+        
+        // Update Cache
         if (data.length > 0) {
-          localStorage.setItem(`civiclens_cache_${cacheKey}`, JSON.stringify({ laws: data, lastUpdated: new Date().toISOString() }));
+          try {
+            await setDoc(cacheRef, {
+              laws: data,
+              lastUpdated: new Date().toISOString()
+            });
+          } catch (cacheErr) {
+            console.warn("Failed to update Firestore cache", cacheErr);
+            // Non-blocking error
+          }
         }
       }
+      
       if (data.length === 0) {
-        setError('No laws found for your location. Try adjusting your settings.');
+        setError("No laws found for your location. Try adjusting your settings.");
       }
+      
+      // Merge with saved status from local storage (or Firestore later)
       const savedIds = JSON.parse(localStorage.getItem('civiclens_saved') || '[]');
-      const hydratedLaws = data.map((law) => ({ ...law, saved: savedIds.includes(law.id) }));
-      setLaws(hydratedLaws);
-      setSelectedLawId((prev) => prev && hydratedLaws.some((law) => law.id === prev) ? prev : null);
+      const processedLaws = data.map(law => ({
+        ...law,
+        saved: savedIds.includes(law.id)
+      }));
+      
+      setLaws(processedLaws);
     } catch (err) {
-      setError('Failed to load laws. Please try again.');
-      console.error(err);
+      setError("Failed to load laws. Please try again.");
+      handleFirestoreError(err, OperationType.GET, "laws_cache");
     } finally {
       setIsLoading(false);
     }
@@ -119,300 +212,409 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('civiclens_settings', JSON.stringify(settings));
-    localStorage.setItem('civiclens_collections', JSON.stringify(bookmarkCollections));
+    
+    // Apply accessibility classes to body
     document.body.classList.toggle('high-contrast', settings.highContrast);
-    document.body.classList.toggle('large-font', settings.largeFont);
-  }, [settings, bookmarkCollections]);
-
-  useEffect(() => {
-    const address = `${settings.location.city}, ${settings.location.state}`;
-    fetchRepresentativesForAddress(address, settings.location.state, laws).then(setRepresentatives).catch(() => setRepresentatives([]));
-    fetchHearingsForLocation(settings.location.state, settings.location.city).then(setHearingEvents).catch(() => setHearingEvents([]));
-  }, [settings.location.city, settings.location.state, laws]);
-
-  useEffect(() => {
-    if (laws.length === 0) return;
-    const actionable = laws.filter((law) => law.status === 'proposed' && (law.saved || userProfile?.followedTopics.some((topic) => law.category.toLowerCase().includes(topic.toLowerCase()))));
-    const auto = actionable.slice(0, 3).map((law) => ({
-      id: `alert-${law.id}`,
-      title: 'Action Needed',
-      message: `${law.title} is active and matches your saved laws or followed topics.`,
-      date: law.date,
-      read: false,
-      type: 'alert' as const,
-      lawId: law.id,
-    }));
-    setNotifications((prev) => {
-      const existing = new Set(prev.map((item) => item.id));
-      return [...prev, ...auto.filter((item) => !existing.has(item.id))];
-    });
-  }, [laws, userProfile?.followedTopics]);
+    document.body.classList.toggle('reduce-motion', !!settings.reduceMotion);
+    document.body.classList.toggle('underline-links', !!settings.underlineLinks);
+  }, [settings]);
 
   const handleSaveSituation = async (situation: string) => {
-    if (!user) return signIn();
+    if (!user) {
+      signIn();
+      return;
+    }
     try {
-      const updated = { ...userProfile!, situation, lastUpdated: new Date().toISOString() };
-      await setDoc(doc(db, 'users', user.uid), updated);
-      setUserProfile(updated);
-      loadLaws();
+      const updatedProfile = { ...userProfile!, situation, lastUpdated: new Date().toISOString() };
+      await setDoc(doc(db, 'users', user.uid), updatedProfile);
+      setUserProfile(updatedProfile);
+      loadLaws(); // Reload laws with new context
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
     }
   };
 
   const handleToggleFollowTopic = async (topic: string) => {
-    if (!user) return signIn();
+    if (!user) {
+      signIn();
+      return;
+    }
     try {
-      const topics = userProfile?.followedTopics.includes(topic)
-        ? userProfile.followedTopics.filter((item) => item !== topic)
+      const topics = userProfile?.followedTopics.includes(topic) 
+        ? userProfile.followedTopics.filter(t => t !== topic)
         : [...(userProfile?.followedTopics || []), topic];
-      const updated = { ...userProfile!, followedTopics: topics, lastUpdated: new Date().toISOString() };
-      await setDoc(doc(db, 'users', user.uid), updated);
-      setUserProfile(updated);
+      const updatedProfile = { ...userProfile!, followedTopics: topics, lastUpdated: new Date().toISOString() };
+      await setDoc(doc(db, 'users', user.uid), updatedProfile);
+      setUserProfile(updatedProfile);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
     }
   };
 
+  const handleUpdateSettings = (newSettings: Partial<UserSettings>) => {
+    setSettings(prev => ({ ...prev, ...newSettings }));
+  };
+
+  const handleLocationChange = (state: string, city: string, language: string) => {
+    setSettings(prev => ({
+      ...prev,
+      location: { state, city },
+      language
+    }));
+  };
+
   const handleSaveLaw = (id: string) => {
-    setLaws((prev) => {
-      const updated = prev.map((law) => law.id === id ? { ...law, saved: !law.saved } : law);
-      localStorage.setItem('civiclens_saved', JSON.stringify(updated.filter((law) => law.saved).map((law) => law.id)));
+    setLaws(prev => {
+      const updated = prev.map(law => 
+        law.id === id ? { ...law, saved: !law.saved } : law
+      );
+      
+      const savedIds = updated.filter(l => l.saved).map(l => l.id);
+      localStorage.setItem('civiclens_saved', JSON.stringify(savedIds));
+      
       return updated;
     });
   };
 
+  const handleCompare = (law: Law) => {
+    setLawsToCompare(prev => {
+      if (prev.find(l => l.id === law.id)) {
+        return prev.filter(l => l.id !== law.id);
+      }
+      if (prev.length >= 2) {
+        return [prev[1], law];
+      }
+      return [...prev, law];
+    });
+  };
+
   const handleVote = (id: string, type: 'support' | 'oppose') => {
-    setLaws((prev) => prev.map((law) => {
+    setLaws(prev => prev.map(law => {
       if (law.id !== id) return law;
+      
       const isRemoving = law.userVote === type;
       const newVote = isRemoving ? undefined : type;
-      const votes = { support: law.votes?.support || 0, oppose: law.votes?.oppose || 0 };
-      if (isRemoving) votes[type] = Math.max(0, votes[type] - 1);
-      else {
-        if (law.userVote) votes[law.userVote] = Math.max(0, votes[law.userVote] - 1);
-        votes[type] += 1;
+      
+      const votes = { ...law.votes! };
+      if (isRemoving) {
+        votes[type]--;
+      } else {
+        if (law.userVote) {
+          votes[law.userVote]--;
+        }
+        votes[type]++;
       }
+      
       return { ...law, userVote: newVote, votes };
     }));
   };
 
-  const handleComment = async (id: string, text: string) => {
-    const moderation = await moderateComment(text);
-    const comment: Comment = {
-      id: Math.random().toString(36).slice(2, 9),
-      userId: user?.uid || 'user-1',
-      userName: user?.email?.split('@')[0] || 'You',
+  const handleComment = (id: string, text: string) => {
+    const newComment: Comment = {
+      id: Math.random().toString(36).substr(2, 9),
+      userId: 'user-1',
+      userName: 'You',
       text,
       date: new Date().toLocaleDateString(),
-      status: moderation.approved ? 'published' : 'flagged',
-      moderationNote: moderation.reason,
     };
-    setLaws((prev) => prev.map((law) => law.id === id ? { ...law, comments: [comment, ...(law.comments || [])] } : law));
-  };
 
-  const handleAddImpactStory = (id: string, text: string) => {
-    setLaws((prev) => prev.map((law) => law.id === id ? {
-      ...law,
-      impactStories: [{
-        id: `story-${Math.random().toString(36).slice(2, 9)}`,
-        author: user?.email?.split('@')[0] || 'Community Member',
-        text,
-        date: new Date().toLocaleDateString(),
-        verified: Boolean(user),
-      }, ...(law.impactStories || [])],
-    } : law));
-  };
-
-  const handleSaveToCollection = (id: string, collectionId: string) => {
-    setBookmarkCollections((prev) => prev.map((collection) => {
-      if (collection.id !== collectionId) return collection;
-      return {
-        ...collection,
-        lawIds: collection.lawIds.includes(id) ? collection.lawIds.filter((lawId) => lawId !== id) : [...collection.lawIds, id],
-      };
+    setLaws(prev => prev.map(law => {
+      if (law.id === id) {
+        return { ...law, comments: [newComment, ...(law.comments || [])] };
+      }
+      return law;
     }));
   };
 
   const handlePollVote = (id: string, optionLabel: string) => {
-    setLaws((prev) => prev.map((law) => {
-      if (law.id !== id || !law.poll) return law;
-      const options = law.poll.options.map((opt) => {
-        if (opt.label === optionLabel) return { ...opt, count: opt.count + 1 };
-        if (opt.label === law.poll?.userChoice) return { ...opt, count: Math.max(0, opt.count - 1) };
-        return opt;
-      });
-      return { ...law, poll: { ...law.poll, options, userChoice: optionLabel } };
+    setLaws(prev => prev.map(law => {
+      if (law.id === id && law.poll) {
+        const options = law.poll.options.map(opt => {
+          if (opt.label === optionLabel) {
+            return { ...opt, count: opt.count + 1 };
+          }
+          if (opt.label === law.poll?.userChoice) {
+            return { ...opt, count: Math.max(0, opt.count - 1) };
+          }
+          return opt;
+        });
+        return { ...law, poll: { ...law.poll, options, userChoice: optionLabel } };
+      }
+      return law;
     }));
   };
 
-  const handleOpenNotification = (notification: Notification) => {
-    setNotifications((prev) => prev.map((item) => item.id === notification.id ? { ...item, read: true } : item));
-    if (notification.lawId) {
-      setSelectedLawId(notification.lawId);
-      setActiveTab('feed');
-    }
-    setShowNotifications(false);
+  const handleMarkNotificationRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
-  const handleMarkAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+  const handleClearNotifications = () => {
+    setNotifications([]);
   };
 
-  const filteredLaws = useMemo(() => laws.filter((law) => {
-    const matchesLevel = levelFilter === 'all'
-      || (levelFilter === 'local' ? law.level === 'city' || law.level === 'county' : law.level === levelFilter);
+  const filteredLaws = laws.filter(law => {
+    const matchesLevel = levelFilter === 'all' || law.level === levelFilter;
     const matchesInterest = interestFilter === 'all' || law.category.toLowerCase().includes(interestFilter.toLowerCase());
     return matchesLevel && matchesInterest;
-  }), [laws, levelFilter, interestFilter]);
-  const feedLaws = useMemo(() => {
-    if (!selectedLawId) return filteredLaws;
-    const selected = filteredLaws.find((law) => law.id === selectedLawId);
-    if (!selected) return filteredLaws;
-    return [selected, ...filteredLaws.filter((law) => law.id !== selectedLawId)];
-  }, [filteredLaws, selectedLawId]);
-  const savedLaws = laws.filter((law) => law.saved);
-  const trendingTopic = laws.length > 0
-    ? Object.entries(laws.reduce((acc, law) => ({ ...acc, [law.category]: (acc[law.category] || 0) + 1 }), {} as Record<string, number>)).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] || 'Housing'
-    : 'Housing';
-  const actionCount = laws.filter((law) => law.status === 'proposed' && (law.saved || interestFilter === 'all' || law.category.toLowerCase().includes(interestFilter.toLowerCase()))).length;
-  const collectionLaws = bookmarkCollections.map((collection) => ({ ...collection, laws: laws.filter((law) => collection.lawIds.includes(law.id)) }));
+  });
+  const savedLaws = laws.filter(l => l.saved);
 
   return (
-    <div className={`app-shell min-h-screen bg-background-color text-text-primary transition-colors ${settings.largeFont ? 'text-lg' : 'text-base'} ${settings.highContrast ? 'contrast-mode' : ''}`}>
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-72 flex-col overflow-y-auto border-r border-slate-200 bg-white p-8">
-        <div className="mb-8 flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white"><Scale size={28} /></div>
+    <div className={`min-h-screen bg-background-color text-text-primary ${settings.largeFont ? 'text-lg' : 'text-base'}`}>
+      {/* Scroll Progress Bar */}
+      <motion.div 
+        className="fixed top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 z-50 origin-left"
+        style={{ scaleX: scrollProgress }}
+      />
+      {/* Sidebar Navigation */}
+      <aside className="fixed left-0 top-0 z-40 h-screen w-72 border-r border-slate-200 bg-white sm:translate-x-0 flex flex-col">
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar pb-32">
+          <div className="mb-12 flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200">
+            <Scale size={28} />
+          </div>
           <div>
             <h1 className="text-2xl font-black tracking-tighter text-indigo-950">CIVICLENS</h1>
             <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400">DEMOCRACY 2.0</p>
           </div>
         </div>
+
         <nav className="space-y-3">
           {[
-            ['feed', LayoutDashboard, 'LEGISLATIVE FEED'],
-            ['saved', Bookmark, 'SAVED LAWS'],
-            ['map', Map, 'MAP VIEW'],
-            ['digest', Zap, 'WEEKLY DIGEST'],
-            ['profile', UserIcon, 'MY PROFILE'],
-            ['roadmap', History, 'ROADMAP'],
-            ['analytics', BarChart3, 'ANALYTICS'],
-          ].map(([id, Icon, label]) => (
-            <button key={id} onClick={() => setActiveTab(id as any)} className={`flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black ${activeTab === id ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}>
-              <Icon size={20} />
-              {label}
+            { id: 'feed', icon: LayoutDashboard, label: 'LEGISLATIVE FEED' },
+            { id: 'saved', icon: Bookmark, label: 'SAVED LAWS' },
+            { id: 'map', icon: Map, label: 'MAP VIEW' },
+            { id: 'digest', icon: Zap, label: 'WEEKLY DIGEST' },
+            { id: 'profile', icon: UserIcon, label: 'MY PROFILE' },
+            { id: 'roadmap', icon: History, label: 'ROADMAP' },
+            { id: 'analytics', icon: BarChart3, label: 'ANALYTICS' },
+          ].map(tab => (
+            <button 
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`relative flex w-full items-center gap-4 rounded-2xl px-5 py-4 text-sm font-black transition-all ${activeTab === tab.id ? 'text-white shadow-lg shadow-indigo-200' : 'text-slate-500 hover:bg-slate-50 hover:text-indigo-600'}`}
+            >
+              {activeTab === tab.id && (
+                <motion.div layoutId="activeTab" className="absolute inset-0 bg-indigo-600 rounded-2xl" />
+              )}
+              <tab.icon size={20} className="relative z-10" />
+              <span className="relative z-10">{tab.label}</span>
             </button>
           ))}
         </nav>
-        <div className="mt-8 border-t border-slate-100 pt-8">
-          <h3 className="mb-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400"><Filter size={12} />Quick Filters</h3>
-          {[
-            ['all', `All Levels (${laws.length})`, Globe],
-            ['federal', `Federal (${laws.filter((law) => law.level === 'federal').length})`, Building2],
-            ['state', `State (${laws.filter((law) => law.level === 'state').length})`, MapPin],
-            ['local', `Local (${laws.filter((law) => law.level === 'city' || law.level === 'county').length})`, LayoutGrid],
-            ['county', `County (${laws.filter((law) => law.level === 'county').length})`, LayoutGrid],
-            ['city', `City (${laws.filter((law) => law.level === 'city').length})`, Building2],
-          ].map(([id, label, Icon]) => (
-            <button key={id} onClick={() => setLevelFilter(id as any)} className={`mb-2 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-xs font-bold ${levelFilter === id ? 'bg-slate-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <Icon size={14} />{label}
-            </button>
-          ))}
+
+        <div className="mt-12 border-t border-slate-100 pt-10">
+          <h3 className="mb-6 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+            <Filter size={12} />
+            Quick Filters
+          </h3>
+          <div className="space-y-2">
+            {[
+              { id: 'all', label: 'All Levels', icon: Globe },
+              { id: 'federal', label: 'Federal', icon: Building2 },
+              { id: 'state', label: 'State', icon: MapPin },
+              { id: 'county', label: 'County', icon: LayoutGrid },
+              { id: 'city', label: 'City', icon: Building2 },
+            ].map((level) => (
+              <button
+                key={level.id}
+                onClick={() => setLevelFilter(level.id as any)}
+                className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-xs font-bold transition-all ${levelFilter === level.id ? 'bg-slate-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <level.icon size={14} />
+                  {level.label}
+                </div>
+                {levelFilter === level.id && <div className="h-1.5 w-1.5 rounded-full bg-indigo-600" />}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="mt-auto pt-8">
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md p-6 border-t border-slate-100">
           {user ? (
-            <div className="flex items-center gap-4 rounded-3xl bg-slate-50 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-600/10 font-black text-indigo-600">{user.email?.[0].toUpperCase()}</div>
+            <div className="flex items-center gap-4 rounded-3xl bg-slate-50 p-4 border border-slate-100">
+              <div className="h-10 w-10 rounded-2xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 font-black text-sm">
+                {user.email?.[0].toUpperCase()}
+              </div>
               <div className="flex-1 overflow-hidden">
                 <p className="truncate text-xs font-black text-slate-900">{user.email}</p>
-                <button onClick={logOut} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">SIGN OUT</button>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <button onClick={logOut} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">SIGN OUT</button>
+                </div>
               </div>
             </div>
           ) : (
-            <button onClick={signIn} className="flex w-full items-center justify-center gap-3 rounded-3xl bg-indigo-600 py-5 text-xs font-black text-white">SIGN IN WITH GOOGLE</button>
+            <div className="space-y-4">
+              <button 
+                onClick={signIn}
+                className="flex w-full items-center justify-center gap-3 rounded-3xl bg-indigo-600 py-5 text-xs font-black text-white shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                SIGN IN WITH GOOGLE
+              </button>
+            </div>
           )}
         </div>
       </aside>
 
+      {/* Main Content */}
       <main className="pl-72">
         <header className="sticky top-0 z-30 flex h-24 items-center justify-between border-b border-slate-200 bg-white/80 px-12 backdrop-blur-xl">
           <div className="flex items-center gap-6">
-            <button onClick={() => setShowLocationSelector((prev) => !prev)} className="flex items-center gap-3 rounded-2xl bg-slate-100 px-5 py-3">
+            <button 
+              onClick={() => setShowLocationSelector(!showLocationSelector)}
+              className="flex items-center gap-3 rounded-2xl bg-slate-100 px-5 py-3 transition-all hover:bg-slate-200"
+            >
               <MapPin size={16} className="text-indigo-600" />
               <span className="text-xs font-black text-slate-900">{settings.location.city}, {settings.location.state}</span>
             </button>
-            <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-xs font-semibold text-slate-700">
-              <Languages size={16} className="text-indigo-600" />
-              {settings.language}
-            </div>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input type="text" placeholder="Search laws, bills, or topics..." className="h-12 w-80 rounded-2xl bg-slate-100 pl-12 pr-4 text-xs font-bold text-slate-900 outline-none" />
+              <input 
+                ref={searchInputRef}
+                type="text" 
+                placeholder="Search laws, bills, or topics..."
+                className="h-12 w-80 rounded-2xl bg-slate-100 pl-12 pr-12 text-xs font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center">
+                <kbd className="hidden sm:inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-black text-slate-500">⌘K</kbd>
+              </div>
             </div>
           </div>
+
           <div className="flex items-center gap-8">
-            <button onClick={() => setShowNotifications((prev) => !prev)} className="relative rounded-2xl p-3 text-slate-400 hover:bg-slate-100 hover:text-indigo-600">
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative rounded-2xl p-3 text-slate-400 transition-all hover:bg-slate-100 hover:text-indigo-600"
+            >
               <Bell size={22} />
-              {notifications.some((item) => !item.read) && <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-rose-500 ring-4 ring-white" />}
+              {notifications.some(n => !n.read) && (
+                <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-rose-500 ring-4 ring-white" />
+              )}
             </button>
-            <button onClick={() => setShowSettings((prev) => !prev)} className="rounded-2xl p-3 text-slate-400 hover:bg-slate-100 hover:text-indigo-600">
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className="rounded-2xl p-3 text-slate-400 transition-all hover:bg-slate-100 hover:text-indigo-600"
+            >
               <Settings size={22} />
             </button>
           </div>
         </header>
 
+        {/* Notifications Panel */}
         <AnimatePresence>
           {showNotifications && (
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="absolute right-12 top-24 z-50 w-96 rounded-[32px] border-2 border-slate-100 bg-white p-6 shadow-2xl shadow-indigo-100">
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="absolute right-12 top-24 z-50 w-96 rounded-[32px] border-2 border-slate-100 bg-white p-6 shadow-2xl shadow-indigo-100"
+            >
               <div className="mb-6 flex items-center justify-between">
                 <h3 className="text-sm font-black uppercase tracking-widest text-indigo-950">Notifications</h3>
-                <div className="flex items-center gap-3">
-                  <button onClick={handleMarkAllNotificationsRead} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">MARK READ</button>
-                  <button onClick={() => setNotifications([])} className="text-[10px] font-bold text-slate-400 hover:text-indigo-600">CLEAR ALL</button>
-                </div>
+                <button 
+                  onClick={handleClearNotifications}
+                  className="text-[10px] font-bold text-slate-400 hover:text-indigo-600"
+                >
+                  CLEAR ALL
+                </button>
               </div>
-              <div className="space-y-4">
-                {notifications.length === 0 && (
-                  <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
-                    You are caught up. New bill alerts and status changes will appear here.
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {notifications.length > 0 ? (
+                  notifications.map(n => (
+                    <div 
+                      key={n.id} 
+                      onClick={() => handleMarkNotificationRead(n.id)}
+                      className={`cursor-pointer rounded-2xl p-4 transition-all ${n.read ? 'bg-slate-50' : 'bg-indigo-50 ring-1 ring-indigo-100'}`}
+                    >
+                      <p className="text-xs font-bold text-slate-900">{n.message}</p>
+                      <p className="mt-1 text-[10px] font-bold text-slate-400">{n.date}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-12 text-center text-slate-400">
+                    <Bell size={32} className="mx-auto mb-4 opacity-10" />
+                    <p className="text-xs font-bold">No new notifications</p>
                   </div>
                 )}
-                {notifications.map((n) => (
-                  <button key={n.id} onClick={() => handleOpenNotification(n)} className={`block w-full rounded-2xl p-4 text-left transition ${n.read ? 'bg-slate-50' : 'bg-indigo-50 ring-1 ring-indigo-100 hover:bg-indigo-100'}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-black text-slate-900">{n.title}</p>
-                        <p className="mt-1 text-xs font-bold text-slate-600">{n.message}</p>
-                      </div>
-                      {!n.read && <span className="mt-1 h-2.5 w-2.5 rounded-full bg-indigo-600" />}
-                    </div>
-                    <p className="mt-2 text-[10px] font-bold text-slate-400">{n.date}</p>
-                  </button>
-                ))}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
+        {/* Settings Modal */}
         <AnimatePresence>
           {showSettings && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-indigo-950/20 backdrop-blur-sm">
-              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full max-w-lg rounded-[40px] bg-white p-10 shadow-2xl">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="w-full max-w-lg rounded-[40px] bg-white p-10 shadow-2xl"
+              >
                 <div className="mb-8 flex items-center justify-between">
                   <h3 className="text-2xl font-black tracking-tight text-indigo-950">App Settings</h3>
-                  <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-indigo-600"><XCircle size={24} /></button>
+                  <button onClick={() => setShowSettings(false)} className="text-slate-400 hover:text-indigo-600">
+                    <XCircle size={24} />
+                  </button>
                 </div>
-                <div className="space-y-6">
-                  <button onClick={() => setSettings((prev) => ({ ...prev, highContrast: !prev.highContrast }))} className={`flex w-full items-center justify-between rounded-2xl px-5 py-4 font-black ${settings.highContrast ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}>High Contrast <span>{settings.highContrast ? 'On' : 'Off'}</span></button>
-                  <button onClick={() => setSettings((prev) => ({ ...prev, largeFont: !prev.largeFont }))} className={`flex w-full items-center justify-between rounded-2xl px-5 py-4 font-black ${settings.largeFont ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-700'}`}>Large Font <span>{settings.largeFont ? 'On' : 'Off'}</span></button>
-                  <div className="rounded-2xl bg-slate-50 px-5 py-4">
-                    <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-500">Language</label>
-                    <select value={settings.language} onChange={(e) => setSettings((prev) => ({ ...prev, language: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 outline-none">
-                      {languageOptions.map((language) => <option key={language} value={language}>{language}</option>)}
-                    </select>
-                    <p className="mt-2 text-xs font-medium text-slate-500">Changing this updates summaries and glossary text across the app where translations are available.</p>
+                <div className="space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">High Contrast</p>
+                      <p className="text-xs font-bold text-slate-400">Improve visibility for text.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ highContrast: !settings.highContrast })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.highContrast ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.highContrast ? 'ml-7' : 'ml-1'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">Large Font</p>
+                      <p className="text-xs font-bold text-slate-400">Increase text size across the app.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ largeFont: !settings.largeFont })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.largeFont ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.largeFont ? 'ml-7' : 'ml-1'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">Reduce Motion</p>
+                      <p className="text-xs font-bold text-slate-400">Minimize animations and transitions.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ reduceMotion: !settings.reduceMotion })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.reduceMotion ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.reduceMotion ? 'ml-7' : 'ml-1'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-black text-indigo-950">Underline Links</p>
+                      <p className="text-xs font-bold text-slate-400">Highlight interactive elements.</p>
+                    </div>
+                    <button 
+                      onClick={() => handleUpdateSettings({ underlineLinks: !settings.underlineLinks })}
+                      className={`h-8 w-14 rounded-full transition-all ${settings.underlineLinks ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <div className={`h-6 w-6 rounded-full bg-white transition-all ${settings.underlineLinks ? 'ml-7' : 'ml-1'}`} />
+                    </button>
                   </div>
                 </div>
+                <button 
+                  onClick={() => setShowSettings(false)}
+                  className="mt-10 w-full rounded-2xl bg-indigo-600 py-5 text-sm font-black text-white shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02]"
+                >
+                  SAVE & CLOSE
+                </button>
               </motion.div>
             </div>
           )}
@@ -420,14 +622,33 @@ export default function App() {
 
         <div className="px-12 py-10">
           <AnimatePresence>
+            {scrollProgress > 0.1 && (
+              <motion.button
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="fixed bottom-10 right-10 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl shadow-indigo-200 transition-transform active:scale-95"
+              >
+                <ChevronUp size={24} />
+              </motion.button>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
             {showLocationSelector && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-8 overflow-hidden">
-                <LocationSelector
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-8 overflow-hidden"
+              >
+                <LocationSelector 
                   initialState={settings.location.state}
                   initialCity={settings.location.city}
                   initialLanguage={settings.language}
                   onLocationChange={(state, city, language) => {
-                    setSettings((prev) => ({ ...prev, location: { state, city }, language }));
+                    handleLocationChange(state, city, language);
                     setShowLocationSelector(false);
                   }}
                   onInterestChange={(interest) => setInterestFilter(interest)}
@@ -436,132 +657,394 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          <AnimatePresence mode="wait">
-            {activeTab === 'feed' && (
-              <motion.div key="feed" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-10">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Legislative Feed</h2>
-                    <p className="mt-2 font-bold text-slate-400">Real-time updates on laws affecting {settings.location.city}.</p>
-                    {settings.language !== 'English' && <p className="mt-2 text-sm font-semibold text-indigo-600">Showing translated summaries in {settings.language}.</p>}
+          {/* Comparison Selection Indicator */}
+          <AnimatePresence>
+            {lawsToCompare.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 50 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 50 }}
+                className="fixed bottom-10 left-1/2 z-50 flex -translate-x-1/2 items-center gap-6 rounded-[32px] bg-indigo-950 p-4 pr-8 text-white shadow-2xl shadow-indigo-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex -space-x-4">
+                    {lawsToCompare.map((law, idx) => (
+                      <div key={law.id} className={`flex h-12 w-12 items-center justify-center rounded-2xl border-4 border-indigo-950 text-xs font-black ${idx === 0 ? 'bg-indigo-600' : 'bg-amber-500'}`}>
+                        {law.title[0]}
+                      </div>
+                    ))}
+                    {lawsToCompare.length < 2 && (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border-4 border-indigo-950 bg-slate-800 text-slate-500">
+                        +
+                      </div>
+                    )}
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-black tracking-tight">Compare Legislation</p>
+                    <p className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">
+                      {lawsToCompare.length === 1 ? "Select 1 more law to compare" : "2 laws selected"}
+                    </p>
                   </div>
                 </div>
-                <LawFeed laws={feedLaws} allLaws={laws} isLoading={isLoading} error={error} highlightedLawId={selectedLawId} onSave={handleSaveLaw} onVote={handleVote} onComment={handleComment} onPollVote={handlePollVote} onAddImpactStory={handleAddImpactStory} onSaveToCollection={handleSaveToCollection} collections={bookmarkCollections} onCompare={(law) => setLawsToCompare((prev) => prev.find((item) => item.id === law.id) ? prev.filter((item) => item.id !== law.id) : prev.length >= 2 ? [prev[1], law] : [...prev, law])} comparingIds={lawsToCompare.map((law) => law.id)} onToggleFollowTopic={handleToggleFollowTopic} followedTopics={userProfile?.followedTopics || []} />
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setLawsToCompare([])}
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white"
+                  >
+                    CLEAR
+                  </button>
+                  {lawsToCompare.length === 2 && (
+                    <button 
+                      onClick={() => setActiveTab('feed')} // Just to ensure we're on a tab where it shows
+                      className="rounded-xl bg-indigo-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 transition-all hover:scale-105"
+                    >
+                      COMPARE NOW
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence mode="wait">
+            {activeTab === 'feed' && (
+              <motion.div 
+                key="feed"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-10"
+              >
+                <div className="flex items-end justify-between">
+                  <div>
+                    <h2 className="text-4xl font-black tracking-tighter text-indigo-950">
+                      {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}!
+                    </h2>
+                    <p className="mt-2 text-sm font-bold text-slate-400">Here's your real-time feed for {settings.location.city}.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    {['Housing', 'Labor', 'Education'].map(topic => (
+                      <button 
+                        key={topic}
+                        onClick={() => setInterestFilter(topic.toLowerCase())}
+                        className={`rounded-xl border border-slate-200 px-4 py-2 text-xs font-black transition-all hover:border-indigo-600 hover:text-indigo-600 ${interestFilter === topic.toLowerCase() ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500'}`}
+                      >
+                        #{topic.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <LawFeed 
+                  laws={filteredLaws} 
+                  isLoading={isLoading} 
+                  error={error} 
+                  onSave={handleSaveLaw} 
+                  onVote={handleVote} 
+                  onComment={handleComment}
+                  onPollVote={handlePollVote}
+                  onCompare={handleCompare}
+                  comparingIds={lawsToCompare.map(l => l.id)}
+                  onToggleFollowTopic={handleToggleFollowTopic}
+                  followedTopics={userProfile?.followedTopics}
+                />
               </motion.div>
             )}
 
             {activeTab === 'saved' && (
-              <motion.div key="saved" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              <motion.div 
+                key="saved"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
                 <div className="mb-10">
                   <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Saved Content</h2>
                   <p className="mt-2 font-bold text-slate-400">Keep track of the legislation that matters most to you.</p>
                 </div>
-                <LawFeed laws={savedLaws} allLaws={laws} isLoading={false} error={null} onSave={handleSaveLaw} onVote={handleVote} onComment={handleComment} onPollVote={handlePollVote} onAddImpactStory={handleAddImpactStory} onSaveToCollection={handleSaveToCollection} collections={bookmarkCollections} onCompare={(law) => setLawsToCompare((prev) => prev.find((item) => item.id === law.id) ? prev.filter((item) => item.id !== law.id) : prev.length >= 2 ? [prev[1], law] : [...prev, law])} comparingIds={lawsToCompare.map((law) => law.id)} />
+                {savedLaws.length > 0 ? (
+                  <LawFeed 
+                    laws={savedLaws} 
+                    isLoading={false} 
+                    error={null} 
+                    onSave={handleSaveLaw} 
+                    onVote={handleVote} 
+                    onComment={handleComment}
+                    onPollVote={handlePollVote}
+                    onCompare={handleCompare}
+                    comparingIds={lawsToCompare.map(l => l.id)}
+                  />
+                ) : (
+                  <div className="flex h-96 flex-col items-center justify-center gap-6 rounded-[40px] border-4 border-dashed border-slate-100 bg-white text-slate-400">
+                    <Bookmark size={64} className="opacity-10" />
+                    <div className="text-center">
+                      <p className="text-xl font-black text-slate-900">No saved laws yet</p>
+                      <p className="mt-1 font-bold">Start exploring the feed to bookmark important legislation.</p>
+                    </div>
+                    <button 
+                      onClick={() => setActiveTab('feed')}
+                      className="rounded-2xl bg-indigo-600 px-8 py-4 text-sm font-black text-white shadow-xl shadow-indigo-100 transition-all hover:scale-105"
+                    >
+                      EXPLORE FEED
+                    </button>
+                  </div>
+                )}
               </motion.div>
             )}
 
             {activeTab === 'digest' && (
-              <motion.div key="digest" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-12">
-                <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-                  <div className="rounded-[40px] bg-indigo-600 p-10 text-white"><Zap size={24} /><h3 className="mt-6 text-4xl font-black">{laws.filter((law) => law.status === 'proposed').length}</h3><p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-indigo-100">New Proposals</p></div>
-                  <div className="rounded-[40px] bg-emerald-600 p-10 text-white"><CheckCircle size={24} /><h3 className="mt-6 text-4xl font-black">{laws.filter((law) => law.status === 'passed').length}</h3><p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-emerald-100">Passed Laws</p></div>
-                  <div className="rounded-[40px] bg-amber-500 p-10 text-white"><AlertTriangle size={24} /><h3 className="mt-6 text-4xl font-black">{laws.filter((law) => law.status === 'updated').length}</h3><p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-amber-100">Updates</p></div>
+              <motion.div 
+                key="digest"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-12"
+              >
+                <div className="mb-10">
+                  <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Weekly Digest</h2>
+                  <p className="mt-2 font-bold text-slate-400">A summary of legislative activity from the past 7 days.</p>
                 </div>
-                <div className="rounded-[40px] border-2 border-slate-100 bg-white p-10 shadow-xl shadow-slate-200/40">
-                  <h3 className="text-2xl font-black tracking-tight text-indigo-950">Upcoming Hearings</h3>
-                  <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {(hearingEvents.length > 0 ? hearingEvents : laws.flatMap((law) => law.hearings || []).slice(0, 4)).map((hearing) => (
-                      <div key={hearing.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">{hearing.type}</p>
-                        <p className="mt-2 text-sm font-black text-slate-900">{hearing.title}</p>
-                        <p className="mt-1 text-xs font-bold text-slate-500">{hearing.date} · {hearing.venue}</p>
-                      </div>
-                    ))}
+
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+                  <div className="rounded-[40px] bg-indigo-600 p-10 text-white shadow-xl shadow-indigo-100">
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                      <Zap size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black tracking-tighter">12</h3>
+                    <p className="mt-2 font-bold text-indigo-100 uppercase tracking-widest text-[10px]">New Proposals</p>
+                  </div>
+                  <div className="rounded-[40px] bg-emerald-600 p-10 text-white shadow-xl shadow-emerald-100">
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                      <CheckCircle size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black tracking-tighter">4</h3>
+                    <p className="mt-2 font-bold text-emerald-100 uppercase tracking-widest text-[10px]">Passed Laws</p>
+                  </div>
+                  <div className="rounded-[40px] bg-amber-500 p-10 text-white shadow-xl shadow-amber-100">
+                    <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+                      <AlertTriangle size={24} />
+                    </div>
+                    <h3 className="text-4xl font-black tracking-tighter">8</h3>
+                    <p className="mt-2 font-bold text-amber-100 uppercase tracking-widest text-[10px]">Updates</p>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-                  {laws.slice(0, 2).map((story) => (
-                    <LawCard key={story.id} law={story} onSave={handleSaveLaw} onVote={handleVote} onComment={handleComment} onPollVote={handlePollVote} onAddImpactStory={handleAddImpactStory} onSaveToCollection={handleSaveToCollection} collections={bookmarkCollections} relatedLaws={laws.filter((law) => (story.relatedLawIds || []).includes(law.id))} />
-                  ))}
+
+                <div className="space-y-8">
+                  <h3 className="text-2xl font-black tracking-tight text-indigo-950">Top Stories This Week</h3>
+                  <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                    {[
+                      { id: 'story-1', title: 'New Rent Control Ordinance Proposed', category: 'Housing', status: 'proposed', level: 'city', date: '2 days ago', impact: 'High impact on local renters and property owners.', simplifiedSummary: 'A new ordinance aims to cap rent increases in the city to 3% annually.' },
+                      { id: 'story-2', title: 'State Education Budget Increase Passed', category: 'Education', status: 'passed', level: 'state', date: '4 days ago', impact: 'Significant funding boost for public schools.', simplifiedSummary: 'The state legislature has approved a 15% increase in education funding for the next fiscal year.' },
+                      { id: 'story-3', title: 'Local Transit Tax Update', category: 'Taxes', status: 'updated', level: 'city', date: '1 week ago', impact: 'Small increase in sales tax to fund transit improvements.', simplifiedSummary: 'A 0.1% sales tax increase has been implemented to fund the expansion of the light rail system.' },
+                      { id: 'story-4', title: 'Immigration Support Program Expanded', category: 'Social', status: 'updated', level: 'state', date: '5 days ago', impact: 'More resources for new residents seeking legal aid.', simplifiedSummary: 'The state has doubled the budget for its legal aid program for immigrants.' }
+                    ].map((story) => (
+                      <LawCard 
+                        key={story.id} 
+                        law={story as any} 
+                        onSave={handleSaveLaw} 
+                        onVote={handleVote} 
+                        onComment={handleComment}
+                        onPollVote={handlePollVote}
+                      />
+                    ))}
+                  </div>
                 </div>
               </motion.div>
             )}
 
             {activeTab === 'profile' && (
-              <motion.div key="profile" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="grid grid-cols-1 gap-12 lg:grid-cols-3">
-                <div className="space-y-12 lg:col-span-2">
-                  <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
-                    <h3 className="text-2xl font-black tracking-tight text-indigo-950">Tell CivicLens about your situation</h3>
-                    <p className="mt-3 max-w-2xl text-sm font-medium leading-6 text-slate-500">Add the details you want the app to use when explaining laws. For example: “I’m a renter,” “I’m a college student,” or “I run a small business in San Francisco.”</p>
-                    <textarea placeholder="Example: I am a renter with two school-age children and I rely on public transit." className="mt-6 w-full rounded-3xl border-2 border-slate-100 bg-slate-50 p-6 text-sm font-bold text-slate-900 outline-none" rows={4} value={userProfile?.situation || ''} onChange={(e) => setUserProfile((prev) => prev ? { ...prev, situation: e.target.value } : prev)} />
-                    <button onClick={() => handleSaveSituation(userProfile?.situation || '')} className="mt-6 rounded-2xl bg-indigo-600 px-10 py-5 text-sm font-black text-white">Save my situation</button>
-                  </section>
-                  <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
-                    <h3 className="text-2xl font-black tracking-tight text-indigo-950">Followed Topics</h3>
-                    <div className="mt-6 flex flex-wrap gap-4">
-                      {['Housing', 'Immigration', 'Labor', 'Education', 'Health', 'Environment', 'Taxes', 'Transport'].map((topic) => (
-                        <button key={topic} onClick={() => handleToggleFollowTopic(topic)} className={`rounded-2xl border-2 px-6 py-4 text-sm font-black ${userProfile?.followedTopics.includes(topic) ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-100 bg-white text-slate-500'}`}>
-                          {topic}
-                          {userProfile?.followedTopics.includes(topic) && <ChevronRight size={14} className="ml-2 inline" />}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-                <div className="space-y-12">
-                  <section className="space-y-8">
-                    <div>
-                      <h3 className="text-2xl font-black tracking-tight text-indigo-950">Your Representatives</h3>
-                      <p className="font-bold text-slate-400 text-sm">Direct connection to your elected officials.</p>
-                    </div>
-                    <div className="grid grid-cols-1 gap-6">
-                      {representatives.map((rep) => <RepresentativeCard key={rep.id} representative={rep} />)}
-                    </div>
-                  </section>
-                  <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
-                    <h3 className="text-2xl font-black tracking-tight text-indigo-950">Collective Bookmarks</h3>
-                    <div className="mt-6 space-y-4">
-                      {collectionLaws.map((collection) => (
-                        <div key={collection.id} className="rounded-3xl border border-slate-100 bg-slate-50 p-6">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-black text-slate-900">{collection.name}</p>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{collection.laws.length} laws</span>
-                          </div>
+              <motion.div 
+                key="profile"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-12"
+              >
+                <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
+                  <div className="lg:col-span-2 space-y-12">
+                    {/* Situation Section */}
+                    <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
+                      <div className="mb-8 flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+                          <MessageSquare size={24} />
                         </div>
-                      ))}
-                    </div>
-                  </section>
+                        <div>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Ask About Your Situation</h3>
+                          <p className="font-bold text-slate-400 text-sm">Get AI-powered legal context tailored to you.</p>
+                        </div>
+                      </div>
+                      <textarea 
+                        className="w-full rounded-3xl border-2 border-slate-100 bg-slate-50 p-6 text-sm font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
+                        rows={4}
+                        placeholder="e.g., I'm an international student working part-time in San Francisco. How do these new labor laws affect me?"
+                        value={userProfile?.situation || ''}
+                        onChange={(e) => setUserProfile(prev => prev ? { ...prev, situation: e.target.value } : null)}
+                      />
+                      <button 
+                        onClick={() => handleSaveSituation(userProfile?.situation || '')}
+                        className="mt-6 rounded-2xl bg-indigo-600 px-10 py-5 text-sm font-black text-white shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02]"
+                      >
+                        UPDATE MY CONTEXT
+                      </button>
+                    </section>
+
+                    {/* Followed Topics */}
+                    <section className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
+                      <div className="mb-8 flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
+                          <TrendingUp size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Followed Topics</h3>
+                          <p className="font-bold text-slate-400 text-sm">Stay updated on specific legislative areas.</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-4">
+                        {['Housing', 'Immigration', 'Labor', 'Education', 'Health', 'Environment', 'Taxes', 'Transport'].map(topic => (
+                          <button 
+                            key={topic}
+                            onClick={() => handleToggleFollowTopic(topic)}
+                            className={`flex items-center gap-3 rounded-2xl border-2 px-6 py-4 text-sm font-black transition-all ${userProfile?.followedTopics.includes(topic) ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border-slate-100 bg-white text-slate-500 hover:border-indigo-600 hover:text-indigo-600'}`}
+                          >
+                            {topic}
+                            {userProfile?.followedTopics.includes(topic) && <ChevronRight size={14} />}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+
+                  <div className="space-y-12">
+                    {/* Representatives */}
+                    <section className="space-y-8">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600">
+                          <Users size={24} />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black tracking-tight text-indigo-950">Your Representatives</h3>
+                          <p className="font-bold text-slate-400 text-sm">Direct connection to your elected officials.</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-6">
+                        {[
+                          {
+                            name: 'Jeff Jackson',
+                            office: 'U.S. Representative',
+                            party: 'Democrat',
+                            photoUrl: 'https://www.congress.gov/img/member/j000308_200.jpg',
+                            emails: ['contact@jackson.house.gov'],
+                            phones: ['(202) 225-5634'],
+                            urls: ['https://jeffjackson.house.gov'],
+                            channels: [{ type: 'Twitter', id: 'JeffJacksonNC' }, { type: 'Facebook', id: 'JeffJacksonNC' }]
+                          },
+                          {
+                            name: 'Thom Tillis',
+                            office: 'U.S. Senator',
+                            party: 'Republican',
+                            photoUrl: 'https://www.congress.gov/img/member/t000476_200.jpg',
+                            emails: ['contact@tillis.senate.gov'],
+                            phones: ['(202) 224-6342'],
+                            urls: ['https://www.tillis.senate.gov'],
+                            channels: [{ type: 'Twitter', id: 'SenThomTillis' }]
+                          }
+                        ].map((rep, idx) => (
+                          <RepresentativeCard key={idx} representative={rep as any} />
+                        ))}
+                      </div>
+                    </section>
+                  </div>
                 </div>
               </motion.div>
             )}
 
-            {activeTab === 'map' && <motion.div key="map" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}><MapView laws={laws} onSelectLaw={(law) => { setSelectedLawId(law.id); setActiveTab('feed'); }} /></motion.div>}
-            {activeTab === 'analytics' && <motion.div key="analytics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}><AnalyticsView laws={laws} collections={bookmarkCollections} /></motion.div>}
-            {activeTab === 'roadmap' && <motion.div key="roadmap" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}><RoadmapView /></motion.div>}
+            {activeTab === 'map' && (
+              <motion.div 
+                key="map"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <MapView 
+                  laws={laws} 
+                  onSelectLaw={(law) => {
+                    setActiveTab('feed');
+                  }} 
+                />
+              </motion.div>
+            )}
+
+            {activeTab === 'analytics' && (
+              <motion.div 
+                key="analytics"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <AnalyticsView />
+              </motion.div>
+            )}
+
+            {activeTab === 'roadmap' && (
+              <motion.div 
+                key="roadmap"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <RoadmapView />
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
-        <div className="mt-24 grid grid-cols-1 gap-8 px-12 md:grid-cols-3">
+        {/* Info Section - Bento Grid */}
+        <div className="mt-24 grid grid-cols-1 gap-8 md:grid-cols-3">
           <div className="rounded-[40px] bg-indigo-600 p-10 text-white shadow-2xl shadow-indigo-200 md:col-span-2">
-            <ShieldCheck size={28} />
-            <h3 className="mt-6 text-3xl font-black tracking-tighter">Your Rights, Simplified.</h3>
-            <p className="mt-4 font-bold text-indigo-100">CivicLens uses AI and official data sources to break down complex legal jargon into actionable insights for your specific situation.</p>
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+              <ShieldCheck size={28} />
+            </div>
+            <h3 className="text-3xl font-black tracking-tighter">Your Rights, Simplified.</h3>
+            <p className="mt-4 font-bold text-indigo-100">CivicLens uses advanced AI to break down complex legal jargon into actionable insights for your specific situation.</p>
+            <div className="mt-8 flex gap-4">
+              <div className="rounded-2xl bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest">Privacy First</div>
+              <div className="rounded-2xl bg-white/10 px-4 py-2 text-[10px] font-black uppercase tracking-widest">AI Powered</div>
+            </div>
           </div>
+
           <div className="rounded-[40px] bg-white p-10 shadow-xl shadow-slate-200/50">
-            <TrendingUp size={28} className="text-amber-600" />
-            <h4 className="mt-6 text-xl font-black tracking-tight text-indigo-950">Trending</h4>
-            <p className="mt-2 text-sm font-bold text-slate-400">{trendingTopic} is the #1 topic in your area this week.</p>
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
+              <TrendingUp size={28} />
+            </div>
+            <h4 className="text-xl font-black tracking-tight text-indigo-950">Trending</h4>
+            <p className="mt-2 text-sm font-bold text-slate-400">Housing reform is the #1 topic in your area this week.</p>
           </div>
+
           <div className="rounded-[40px] bg-slate-900 p-10 text-white shadow-xl">
-            <Zap size={28} className="text-amber-400" />
-            <h4 className="mt-6 text-xl font-black tracking-tight">Quick Action</h4>
-            <p className="mt-2 text-sm font-bold text-slate-400">{actionCount} active bills matching your interests or saved laws need your feedback.</p>
+            <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+              <Zap size={28} className="text-amber-400" />
+            </div>
+            <h4 className="text-xl font-black tracking-tight">Quick Action</h4>
+            <p className="mt-2 text-sm font-bold text-slate-400">3 new bills matching your interests need your feedback.</p>
+            <button className="mt-6 text-xs font-black text-amber-400 hover:underline">VIEW ACTIONS →</button>
           </div>
         </div>
+
+        <footer className="mt-32 border-t border-slate-100 py-16 text-center">
+          <p className="text-xs font-black uppercase tracking-widest text-slate-400">© 2026 CivicLens. Empowering communities through information.</p>
+          <p className="mt-4 mx-auto max-w-2xl text-[10px] font-bold text-slate-300">CivicLens provides AI-generated summaries for informational purposes. Always consult with a legal professional for specific legal advice.</p>
+        </footer>
       </main>
 
       <AILawyer laws={laws} userSituation={userProfile?.situation} />
-      {lawsToCompare.length === 2 && <CompareLaws law1={lawsToCompare[0]} law2={lawsToCompare[1]} onClose={() => setLawsToCompare([])} />}
+
+      {lawsToCompare.length === 2 && (
+        <CompareLaws 
+          law1={lawsToCompare[0]} 
+          law2={lawsToCompare[1]} 
+          onClose={() => setLawsToCompare([])} 
+        />
+      )}
     </div>
   );
 }
