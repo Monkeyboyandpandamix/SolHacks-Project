@@ -2,49 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: users
-    // Document ID: {uid}
-    // Fields:
-    //   - uid: string (required)
-    //   - email: string (required)
-    //   - situation: string (optional)
-    //   - location: map (required)
-    //   - interests: list (optional)
-    //   - followedTopics: list (optional)
-    //   - lastUpdated: string (required)
-    //
-    // Collection: laws
-    // Document ID: {lawId}
-    // Fields:
-    //   - id: string (required)
-    //   - title: string (required)
-    //   - simplifiedSummary: string (required)
-    //   - impact: string (required)
-    //   - category: string (required)
-    //   - level: string (required)
-    //   - status: string (required)
-    //   - date: string (required)
-    //   - lastUpdated: string (required)
-    //
-    // Subcollection: laws/{lawId}/comments
-    // Document ID: {commentId}
-    // Fields:
-    //   - id: string (required)
-    //   - userId: string (required)
-    //   - userName: string (required)
-    //   - text: string (required)
-    //   - date: string (required)
-    //
-    // ===============================================================
-
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
-    
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -55,52 +12,86 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
           (request.auth.token.email == "mo10141014@gmail.com" && request.auth.token.email_verified == true));
     }
 
     function isValidUser(data) {
       return data.keys().hasAll(['uid', 'email', 'location', 'lastUpdated']) &&
-             data.uid is string && data.email is string &&
-             data.location is map && data.lastUpdated is string;
-    }
-
-    function isValidLaw(data) {
-      return data.keys().hasAll(['id', 'title', 'simplifiedSummary', 'impact', 'category', 'level', 'status', 'date', 'lastUpdated']) &&
-             data.id is string && data.title is string && data.simplifiedSummary is string &&
-             data.impact is string && data.category is string && data.level in ['federal', 'state', 'county', 'city'] &&
-             data.status in ['proposed', 'passed', 'rejected', 'updated'] && data.date is string && data.lastUpdated is string;
+        data.uid is string &&
+        data.email is string &&
+        data.location is map &&
+        data.location.state is string &&
+        data.location.city is string &&
+        data.lastUpdated is string &&
+        (!('interests' in data) || data.interests is list) &&
+        (!('followedTopics' in data) || data.followedTopics is list) &&
+        (!('situation' in data) || data.situation is string);
     }
 
     function isValidComment(data) {
       return data.keys().hasAll(['id', 'userId', 'userName', 'text', 'date']) &&
-             data.id is string && data.userId == request.auth.uid &&
-             data.userName is string && data.text is string && data.text.size() < 1000 &&
-             data.date is string;
+        data.id is string &&
+        data.userId == request.auth.uid &&
+        data.userName is string &&
+        data.text is string &&
+        data.text.size() > 0 &&
+        data.text.size() < 1000 &&
+        data.date is string;
     }
 
-    // ===============================================================
-    // Rules
-    // ===============================================================
+    function isValidCommunityMessage(data) {
+      return data.keys().hasAll(['text', 'userId', 'userName', 'createdAt', 'state', 'city']) &&
+        data.text is string &&
+        data.text.size() > 0 &&
+        data.text.size() <= 1000 &&
+        data.userId == request.auth.uid &&
+        data.userName is string &&
+        data.userName.size() > 0 &&
+        data.state is string &&
+        data.city is string &&
+        data.createdAt == request.time;
+    }
 
     match /laws_cache/{cacheId} {
       allow read: if true;
-      allow write: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
     }
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid) && isValidUser(request.resource.data) && (!('role' in request.resource.data) || request.resource.data.role == 'user');
-      allow update: if isOwner(uid) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+      allow create: if isOwner(uid) &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.uid == uid &&
+        (!('role' in request.resource.data) || request.resource.data.role == 'user');
+      allow update: if isOwner(uid) &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.email == resource.data.email &&
+        (!('role' in request.resource.data) || !('role' in resource.data) || request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isOwner(uid) || isAdmin();
     }
 
     match /laws/{lawId} {
-      allow read: if true; // Publicly readable laws
-      allow write: if isAdmin(); // Only admins/system can cache laws
-      
+      allow read: if true;
+      allow write: if isAdmin();
+
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isAuthenticated() && isValidComment(request.resource.data);
+        allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      }
+    }
+
+    match /community_rooms/{roomId} {
+      allow read: if true;
+      allow write: if false;
+
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && isValidCommunityMessage(request.resource.data);
         allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
       }
     }
