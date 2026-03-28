@@ -48,6 +48,21 @@ import { fetchLaws } from './services/geminiService';
 import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
 import { collection, doc, getDoc, setDoc, getDocs, query, where, Timestamp } from 'firebase/firestore';
 
+function sanitizeForFirestore<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeForFirestore(item)) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    const cleanedEntries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .map(([entryKey, entryValue]) => [entryKey, sanitizeForFirestore(entryValue)]);
+    return Object.fromEntries(cleanedEntries) as T;
+  }
+
+  return value;
+}
+
 export default function App() {
   const LAWS_PER_PAGE = 5;
   const [user, setUser] = useState<any>(null);
@@ -145,9 +160,8 @@ export default function App() {
     setIsLoading(true);
     setError(null);
     try {
-      const primaryInterest = settings.interests[0] || 'all';
       // 1. Check Cache in Firestore
-      const cacheKey = `v2_${settings.location.state}_${settings.location.city}_${settings.language}_${primaryInterest}`;
+      const cacheKey = `v3_${settings.location.state}_${settings.location.city}_${settings.language}`;
       const cacheRef = doc(db, 'laws_cache', cacheKey);
       let data: Law[] = [];
       const CACHE_LIMIT = 4 * 60 * 60 * 1000; // 4 hours
@@ -176,14 +190,14 @@ export default function App() {
           settings.location.city, 
           settings.language,
           userProfile?.situation,
-          primaryInterest
+          'all'
         );
         
         // Update Cache
         if (data.length > 0) {
           try {
             await setDoc(cacheRef, {
-              laws: data,
+              laws: sanitizeForFirestore(data),
               lastUpdated: new Date().toISOString()
             });
           } catch (cacheErr) {

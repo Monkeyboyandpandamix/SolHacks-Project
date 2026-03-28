@@ -98,6 +98,90 @@ function computeVelocityScore(status: Law["status"], timeline?: Law["timeline"],
   return Math.min(99, base + stageBoost + sentimentBoost);
 }
 
+function normalizeText(value?: string) {
+  return (value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function canonicalLawKey(input: Partial<Law> & { id?: string; title?: string }) {
+  const sourcePart = normalizeText(input.sourceUrl);
+  if (sourcePart) return `source:${sourcePart}`;
+
+  const idPart = normalizeText(input.id);
+  if (idPart && !/^(fed|state|doc|scrape|fr)-\d+$/.test(idPart)) {
+    return `id:${idPart}`;
+  }
+
+  return `title:${normalizeText(input.title)}|date:${normalizeText(input.date)}|level:${normalizeText(input.level)}`;
+}
+
+function preferLongerText(primary?: string, secondary?: string) {
+  return (secondary && secondary.length > (primary || "").length) ? secondary : primary;
+}
+
+function mergeUniqueStrings(values: Array<string | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value && value.trim())).map((value) => value.trim()))];
+}
+
+function dedupeLaws(laws: Law[], state: string, city: string): Law[] {
+  const byKey = new Map<string, Law>();
+
+  for (const current of laws) {
+    const prepared = createLawFromRaw(current as Partial<Law> & { id: string; title: string }, state, city);
+    const key = canonicalLawKey(prepared);
+    const existing = byKey.get(key);
+
+    if (!existing) {
+      byKey.set(key, prepared);
+      continue;
+    }
+
+    const mergedCategory = mergeUniqueStrings([existing.category, prepared.category]).join(" / ") || existing.category;
+    const mergedGlossary = [...(existing.glossary || []), ...(prepared.glossary || [])].filter(
+      (item, index, list) => list.findIndex((candidate) => normalizeText(candidate.term) === normalizeText(item.term)) === index,
+    );
+    const mergedTimeline = [...(existing.timeline || []), ...(prepared.timeline || [])].filter(
+      (item, index, list) => list.findIndex((candidate) => `${candidate.stage}-${candidate.date}-${candidate.description}` === `${item.stage}-${item.date}-${item.description}`) === index,
+    );
+    const mergedHearings = [...(existing.hearings || []), ...(prepared.hearings || [])].filter(
+      (item, index, list) => list.findIndex((candidate) => candidate.id === item.id || `${candidate.title}-${candidate.date}` === `${item.title}-${item.date}`) === index,
+    );
+    const mergedAdvocacyGroups = [...(existing.advocacyGroups || []), ...(prepared.advocacyGroups || [])].filter(
+      (item, index, list) => list.findIndex((candidate) => normalizeText(candidate.name) === normalizeText(item.name)) === index,
+    );
+    const mergedImpactStories = [...(existing.impactStories || []), ...(prepared.impactStories || [])].filter(
+      (item, index, list) => list.findIndex((candidate) => `${normalizeText(candidate.text)}-${normalizeText(candidate.authorName)}` === `${normalizeText(item.text)}-${normalizeText(item.authorName)}`) === index,
+    );
+
+    byKey.set(key, {
+      ...existing,
+      id: existing.id.length <= prepared.id.length ? existing.id : prepared.id,
+      title: preferLongerText(existing.title, prepared.title) || existing.title,
+      originalText: preferLongerText(existing.originalText, prepared.originalText) || existing.originalText,
+      simplifiedSummary: preferLongerText(existing.simplifiedSummary, prepared.simplifiedSummary) || existing.simplifiedSummary,
+      impact: preferLongerText(existing.impact, prepared.impact) || existing.impact,
+      personalImpact: preferLongerText(existing.personalImpact, prepared.personalImpact) || existing.personalImpact,
+      category: mergedCategory,
+      sourceUrl: existing.sourceUrl || prepared.sourceUrl,
+      timeline: mergedTimeline,
+      glossary: mergedGlossary,
+      hearings: mergedHearings,
+      advocacyGroups: mergedAdvocacyGroups,
+      impactStories: mergedImpactStories,
+      relatedLawIds: mergeUniqueStrings([...(existing.relatedLawIds || []), ...(prepared.relatedLawIds || [])]),
+      velocityScore: Math.max(existing.velocityScore || 0, prepared.velocityScore || 0),
+      votes: {
+        support: Math.max(existing.votes?.support || 0, prepared.votes?.support || 0),
+        oppose: Math.max(existing.votes?.oppose || 0, prepared.votes?.oppose || 0),
+      },
+    });
+  }
+
+  return [...byKey.values()];
+}
+
 function buildHearings(law: Partial<Law>, city: string): HearingEvent[] {
   const date = law.date || new Date().toLocaleDateString();
   return [{
@@ -267,7 +351,7 @@ function ensureJurisdictionCoverage(laws: Law[], state: string, city: string): L
 }
 
 function enrichLaws(laws: Law[], state: string, city: string): Law[] {
-  return ensureJurisdictionCoverage(laws, state, city).map((law, index) => {
+  return dedupeLaws(ensureJurisdictionCoverage(laws, state, city), state, city).map((law, index) => {
     const related = laws
       .filter(candidate => candidate.id !== law.id && (candidate.category === law.category || candidate.level === law.level))
       .slice(0, 3)

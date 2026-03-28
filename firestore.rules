@@ -54,9 +54,15 @@ service cloud.firestore {
         data.createdAt == request.time;
     }
 
+    function isValidLawsCache(data) {
+      return data.keys().hasAll(['laws', 'lastUpdated']) &&
+        data.laws is list &&
+        data.lastUpdated is string;
+    }
+
     match /laws_cache/{cacheId} {
       allow read: if true;
-      allow create, update: if isAuthenticated();
+      allow create, update: if isValidLawsCache(request.resource.data);
       allow delete: if isAdmin();
     }
 
