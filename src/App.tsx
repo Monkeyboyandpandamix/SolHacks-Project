@@ -32,7 +32,7 @@ import {
   UsersRound
 } from 'lucide-react';
 import Header from './components/Header';
-import LocationSelector from './components/LocationSelector';
+import LocationSelector, { STATE_FLAGS, STATE_ABBR } from './components/LocationSelector';
 import LawFeed from './components/LawFeed';
 import LawCard from './components/LawCard';
 import CompareLaws from './components/CompareLaws';
@@ -589,7 +589,9 @@ export default function App() {
               className="flex items-center gap-3 rounded-2xl bg-slate-100 px-5 py-3 transition-all hover:bg-slate-200"
             >
               <MapPin size={16} className="text-indigo-600" />
-              <span className="text-xs font-black text-slate-900">{settings.location.city}, {settings.location.state}</span>
+              <span className="text-xs font-black text-slate-900">
+                {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state} (${STATE_ABBR[settings.location.state]})` : `${settings.location.state} (${STATE_ABBR[settings.location.state]})`}
+              </span>
             </button>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -763,10 +765,10 @@ export default function App() {
           <AnimatePresence>
             {showLocationSelector && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mb-8 overflow-hidden"
+                initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                animate={{ opacity: 1, height: 'auto', transitionEnd: { overflow: 'visible' } }}
+                exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                className="mb-8 relative z-40"
               >
                 <LocationSelector 
                   initialState={settings.location.state}
@@ -845,8 +847,14 @@ export default function App() {
                     <h2 className="text-4xl font-black tracking-tighter text-indigo-950">
                       {new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 18 ? 'Good afternoon' : 'Good evening'}!
                     </h2>
-                    <p className="mt-2 text-sm font-bold text-slate-400">
-                      Here's your real-time feed for {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state}` : settings.location.state}.
+                    <p className="mt-2 text-sm font-bold flex items-center gap-2 text-slate-400">
+                      Here's your real-time feed for
+                      {STATE_FLAGS[settings.location.state] && (
+                        <img src={`https://flagcdn.com/w20/${STATE_FLAGS[settings.location.state]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[settings.location.state]}.png 2x`} width="20" alt={`${settings.location.state} flag`} className="rounded-sm shadow-sm" />
+                      )}
+                      <span>
+                        {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state} (${STATE_ABBR[settings.location.state]})` : `${settings.location.state} (${STATE_ABBR[settings.location.state]})`}.
+                      </span>
                     </p>
                   </div>
                   <div className="flex gap-3">
