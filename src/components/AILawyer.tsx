@@ -41,7 +41,7 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
 
   return (
     <>
-      <button onClick={() => setIsOpen(true)} className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-accent-color text-white shadow-lg transition-transform hover:scale-110 active:scale-95">
+      <button onClick={() => setIsOpen(true)} className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg transition-transform hover:scale-110 active:scale-95">
         <MessageSquare size={24} />
       </button>
 
@@ -51,9 +51,9 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[350px] flex-col overflow-hidden rounded-2xl border border-border-color bg-card-bg shadow-2xl md:w-[400px]"
+            className="fixed bottom-24 right-6 z-50 flex h-[500px] w-[350px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl md:w-[400px]"
           >
-            <div className="flex items-center justify-between bg-accent-color px-4 py-3 text-white">
+            <div className="flex items-center justify-between bg-indigo-600 px-4 py-3 text-white">
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
                   <Bot size={18} />
@@ -74,23 +74,23 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
                 return (
                   <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex max-w-[85%] gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${msg.role === 'user' ? 'bg-accent-color text-white' : 'bg-gray-100 text-gray-600'}`}>
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
                         {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                       </div>
-                      <div className={`rounded-2xl px-3 py-2 text-sm leading-relaxed ${msg.role === 'user' ? 'rounded-tr-none bg-accent-color text-white' : 'rounded-tl-none bg-gray-100 text-gray-800'}`}>
+                      <div className={`rounded-2xl px-3 py-2 text-sm leading-relaxed ${msg.role === 'user' ? 'rounded-tr-none bg-indigo-600 text-white' : 'rounded-tl-none bg-gray-100 text-gray-800'}`}>
                         {msg.text}
                       </div>
                     </div>
                     {msg.role === 'model' && mentionedLaw?.poll && (
-                      <div className="ml-10 mt-2 max-w-[80%] rounded-xl border border-border-color bg-white p-3 shadow-sm">
-                        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-accent-color">
+                      <div className="ml-10 mt-2 max-w-[80%] rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                        <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-indigo-600">
                           <BarChart3 size={12} />
                           Related Poll
                         </div>
                         <p className="mb-2 text-xs font-bold">{mentionedLaw.poll.question}</p>
                         <div className="flex flex-wrap gap-2">
                           {mentionedLaw.poll.options.map((opt) => (
-                            <button key={opt.label} className="rounded-full border border-accent-color/30 bg-accent-color/5 px-3 py-1 text-[10px] font-bold text-accent-color transition-colors hover:bg-accent-color/10">
+                            <button key={opt.label} className="rounded-full border border-indigo-600/30 bg-indigo-600/5 px-3 py-1 text-[10px] font-bold text-indigo-600 transition-colors hover:bg-indigo-600/10">
                               {opt.label}
                             </button>
                           ))}
@@ -108,7 +108,7 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
                       <Bot size={16} />
                     </div>
                     <div className="flex items-center gap-1 rounded-2xl bg-gray-100 px-3 py-2">
-                      <Loader2 size={14} className="animate-spin text-accent-color" />
+                      <Loader2 size={14} className="animate-spin text-indigo-600" />
                       <span className="text-xs text-muted">Thinking...</span>
                     </div>
                   </div>
@@ -117,8 +117,8 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-border-color p-3">
-              <div className="flex items-center gap-2 rounded-full border border-border-color bg-gray-50 px-3 py-1.5 focus-within:ring-2 focus-within:ring-accent-color">
+            <div className="border-t border-slate-200 p-3">
+              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-gray-50 px-3 py-1.5 focus-within:ring-2 focus-within:ring-indigo-600">
                 <input
                   type="text"
                   value={input}
@@ -127,7 +127,7 @@ const AILawyer: React.FC<AILawyerProps> = ({ laws, userSituation }) => {
                   placeholder="Ask about a law..."
                   className="flex-1 bg-transparent text-sm focus:outline-none"
                 />
-                <button onClick={handleSend} disabled={!input.trim() || isLoading} className="rounded-full bg-accent-color p-1.5 text-white disabled:opacity-50">
+                <button onClick={handleSend} disabled={!input.trim() || isLoading} className="rounded-full bg-indigo-600 p-1.5 text-white disabled:opacity-50">
                   <Send size={16} />
                 </button>
               </div>

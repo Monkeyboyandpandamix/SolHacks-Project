@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bookmark, Share2, ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, CheckCircle, Clock, AlertTriangle, XCircle, Globe, Map, Building2, Landmark, MessageSquare, Send, BarChart3, Sparkles, BookOpen, Mail, Copy, Check, Volume2, VolumeX } from 'lucide-react';
+import { Bookmark, Share2, ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, CheckCircle, Clock, AlertTriangle, XCircle, Globe, Map, Building2, Landmark, MessageSquare, Send, BarChart3, Sparkles, BookOpen, Mail, Copy, Check, Volume2, VolumeX, Maximize, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Law, Comment } from '../types';
 import { generateAdvocacyLetter } from '../services/geminiService';
@@ -26,6 +26,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
   const [isPlaying, setIsPlaying] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   const totalChars = (law.originalText?.length || 0) + (law.simplifiedSummary?.length || 0);
   const readingTime = Math.max(1, Math.ceil(totalChars / 1000));
@@ -205,14 +206,24 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                 (Double-tap to support)
               </span>
             </h4>
-            <button 
-              onClick={toggleSpeech}
-              className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
-              title={isPlaying ? "Stop listening" : "Listen to summary"}
-            >
-              {isPlaying ? <VolumeX size={16} /> : <Volume2 size={16} />}
-              {isPlaying ? "STOP" : "LISTEN"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setIsFocusMode(true)}
+                className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
+                title="Zen Focus Mode"
+              >
+                <Maximize size={16} />
+                FOCUS
+              </button>
+              <button 
+                onClick={toggleSpeech}
+                className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
+                title={isPlaying ? "Stop listening" : "Listen to summary"}
+              >
+                {isPlaying ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                {isPlaying ? "STOP" : "LISTEN"}
+              </button>
+            </div>
           </div>
           <p className="text-xl font-bold leading-relaxed text-slate-700">{law.simplifiedSummary}</p>
         </div>
@@ -508,6 +519,69 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                   </div>
                 )}
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Zen Focus Mode Overlay */}
+        <AnimatePresence>
+          {isFocusMode && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 z-[100] flex flex-col bg-slate-50 overflow-y-auto custom-scrollbar"
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white/80 px-8 py-6 backdrop-blur-xl">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-200">
+                    <BookOpen size={24} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black text-indigo-950">Zen Reader</h2>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-600">Distraction-free focus mode</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsFocusMode(false)}
+                  className="flex items-center gap-2 rounded-2xl bg-slate-100 px-6 py-3 text-xs font-black transition-all hover:bg-rose-100 hover:text-rose-600"
+                >
+                  <X size={18} />
+                  CLOSE
+                </button>
+              </div>
+              <div className="mx-auto max-w-3xl px-8 py-20 pb-40">
+                <div className="mb-10 text-center">
+                  <span className="mb-6 inline-block rounded-full border-2 border-indigo-100 bg-indigo-50 px-6 py-2 text-xs font-black uppercase tracking-widest text-indigo-600">
+                    {law.category}
+                  </span>
+                  <h1 className="text-5xl font-black leading-tight tracking-tighter text-slate-900 md:text-6xl">
+                    {law.title}
+                  </h1>
+                </div>
+                <div className="space-y-16">
+                  <section>
+                    <h3 className="mb-6 flex items-center gap-3 text-sm font-black uppercase tracking-widest text-slate-400">
+                      <Sparkles size={20} className="text-amber-500" />
+                      The Gist
+                    </h3>
+                    <p className="text-2xl font-bold leading-relaxed text-indigo-950 md:text-3xl md:leading-relaxed">
+                      {law.simplifiedSummary}
+                    </p>
+                  </section>
+                  <div className="h-px w-32 bg-slate-200 mx-auto" />
+                  <section>
+                    <h3 className="mb-6 flex items-center gap-3 text-sm font-black uppercase tracking-widest text-slate-400">
+                      <Landmark size={20} className="text-slate-400" />
+                      Official Text
+                    </h3>
+                    <div className="font-serif text-xl leading-loose text-slate-700 md:text-2xl md:leading-loose text-justify">
+                      {law.originalText}
+                    </div>
+                  </section>
+                </div>
+              </div>
+              <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none" />
             </motion.div>
           )}
         </AnimatePresence>
