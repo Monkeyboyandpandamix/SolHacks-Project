@@ -1,5 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapPin, Search, Navigation, Loader2 } from 'lucide-react';
+import { MapPin, Search, Navigation, Loader2, ChevronDown } from 'lucide-react';
+
+const STATE_FLAGS: Record<string, string> = {
+  "Alabama": "us-al", "Alaska": "us-ak", "Arizona": "us-az", "Arkansas": "us-ar", "California": "us-ca",
+  "Colorado": "us-co", "Connecticut": "us-ct", "Delaware": "us-de", "Florida": "us-fl", "Georgia": "us-ga",
+  "Hawaii": "us-hi", "Idaho": "us-id", "Illinois": "us-il", "Indiana": "us-in", "Iowa": "us-ia",
+  "Kansas": "us-ks", "Kentucky": "us-ky", "Louisiana": "us-la", "Maine": "us-me", "Maryland": "us-md",
+  "Massachusetts": "us-ma", "Michigan": "us-mi", "Minnesota": "us-mn", "Mississippi": "us-ms", "Missouri": "us-mo",
+  "Montana": "us-mt", "Nebraska": "us-ne", "Nevada": "us-nv", "New Hampshire": "us-nh", "New Jersey": "us-nj",
+  "New Mexico": "us-nm", "New York": "us-ny", "North Carolina": "us-nc", "North Dakota": "us-nd", "Ohio": "us-oh",
+  "Oklahoma": "us-ok", "Oregon": "us-or", "Pennsylvania": "us-pa", "Rhode Island": "us-ri", "South Carolina": "us-sc",
+  "South Dakota": "us-sd", "Tennessee": "us-tn", "Texas": "us-tx", "Utah": "us-ut",
+  "Vermont": "us-vt", "Virginia": "us-va", "Washington": "us-wa", "West Virginia": "us-wv",
+  "Wisconsin": "us-wi", "Wyoming": "us-wy", "Puerto Rico": "pr", "Washington D.C.": "us"
+};
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
 
@@ -20,7 +34,19 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showStateDropdown, setShowStateDropdown] = useState(false);
   const suggestionRef = useRef<HTMLDivElement>(null);
+  const stateDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutsideState = (event: MouseEvent) => {
+      if (stateDropdownRef.current && !stateDropdownRef.current.contains(event.target as Node)) {
+        setShowStateDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutsideState);
+    return () => document.removeEventListener('mousedown', handleClickOutsideState);
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -114,15 +140,45 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 relative" ref={stateDropdownRef}>
             <label className="text-xs font-medium text-muted">State/Territory</label>
-            <select 
-              value={state}
-              onChange={(e) => setState(e.target.value)}
-              className="rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color"
+            <button 
+              onClick={() => setShowStateDropdown(!showStateDropdown)}
+              className="flex items-center justify-between rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color text-left"
             >
-              {states.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+              <div className="flex items-center gap-2">
+                {STATE_FLAGS[state] && (
+                  <img src={`https://flagcdn.com/w20/${STATE_FLAGS[state]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[state]}.png 2x`} width="20" alt={`${state} flag`} className="rounded-sm shadow-sm" />
+                )}
+                <span>{state}</span>
+              </div>
+              <ChevronDown size={14} className="text-muted" />
+            </button>
+            <AnimatePresence>
+              {showStateDropdown && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute left-0 right-0 top-[105%] z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-border-color bg-white shadow-xl custom-scrollbar"
+                >
+                  {states.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { setState(s); setShowStateDropdown(false); }}
+                      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                    >
+                      {STATE_FLAGS[s] ? (
+                        <img src={`https://flagcdn.com/w20/${STATE_FLAGS[s]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[s]}.png 2x`} width="20" alt={`${s} flag`} className="rounded-sm shadow-sm" />
+                      ) : (
+                        <div className="w-[20px]" />
+                      )}
+                      <span>{s}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium text-muted">City / County</label>
