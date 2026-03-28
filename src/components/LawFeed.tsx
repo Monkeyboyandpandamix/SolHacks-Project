@@ -9,6 +9,7 @@ interface LawFeedProps {
   allLaws?: Law[];
   isLoading: boolean;
   error: string | null;
+  highlightedLawId?: string | null;
   onSave: (id: string) => void;
   onVote: (id: string, type: 'support' | 'oppose') => void;
   onComment: (id: string, text: string) => void;
@@ -39,6 +40,7 @@ const LawFeed: React.FC<LawFeedProps> = ({
   allLaws = laws,
   isLoading,
   error,
+  highlightedLawId,
   onSave,
   onVote,
   onComment,
@@ -145,6 +147,7 @@ const LawFeed: React.FC<LawFeedProps> = ({
             isComparing={comparingIds.includes(law.id)}
             onToggleFollowTopic={onToggleFollowTopic}
             isFollowingTopic={followedTopics.includes(law.category)}
+            isHighlighted={highlightedLawId === law.id}
             relatedLaws={allLaws.filter((candidate) => (law.relatedLawIds || []).includes(candidate.id))}
           />
         ))}

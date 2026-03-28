@@ -41,6 +41,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [lawsToCompare, setLawsToCompare] = useState<Law[]>([]);
+  const [selectedLawId, setSelectedLawId] = useState<string | null>(null);
   const [bookmarkCollections, setBookmarkCollections] = useState<BookmarkCollection[]>(() => {
     const saved = localStorage.getItem('civiclens_collections');
     return saved ? JSON.parse(saved) : [{ id: 'default', name: 'My Civic Watchlist', lawIds: [] }];
@@ -100,7 +101,9 @@ export default function App() {
         setError('No laws found for your location. Try adjusting your settings.');
       }
       const savedIds = JSON.parse(localStorage.getItem('civiclens_saved') || '[]');
-      setLaws(data.map((law) => ({ ...law, saved: savedIds.includes(law.id) })));
+      const hydratedLaws = data.map((law) => ({ ...law, saved: savedIds.includes(law.id) }));
+      setLaws(hydratedLaws);
+      setSelectedLawId((prev) => prev && hydratedLaws.some((law) => law.id === prev) ? prev : null);
     } catch (err) {
       setError('Failed to load laws. Please try again.');
       console.error(err);
@@ -247,6 +250,12 @@ export default function App() {
     const matchesInterest = interestFilter === 'all' || law.category.toLowerCase().includes(interestFilter.toLowerCase());
     return matchesLevel && matchesInterest;
   }), [laws, levelFilter, interestFilter]);
+  const feedLaws = useMemo(() => {
+    if (!selectedLawId) return filteredLaws;
+    const selected = filteredLaws.find((law) => law.id === selectedLawId);
+    if (!selected) return filteredLaws;
+    return [selected, ...filteredLaws.filter((law) => law.id !== selectedLawId)];
+  }, [filteredLaws, selectedLawId]);
   const savedLaws = laws.filter((law) => law.saved);
   const trendingTopic = laws.length > 0
     ? Object.entries(laws.reduce((acc, law) => ({ ...acc, [law.category]: (acc[law.category] || 0) + 1 }), {} as Record<string, number>)).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] || 'Housing'
@@ -395,7 +404,7 @@ export default function App() {
                     <p className="mt-2 font-bold text-slate-400">Real-time updates on laws affecting {settings.location.city}.</p>
                   </div>
                 </div>
-                <LawFeed laws={filteredLaws} allLaws={laws} isLoading={isLoading} error={error} onSave={handleSaveLaw} onVote={handleVote} onComment={handleComment} onPollVote={handlePollVote} onAddImpactStory={handleAddImpactStory} onSaveToCollection={handleSaveToCollection} collections={bookmarkCollections} onCompare={(law) => setLawsToCompare((prev) => prev.find((item) => item.id === law.id) ? prev.filter((item) => item.id !== law.id) : prev.length >= 2 ? [prev[1], law] : [...prev, law])} comparingIds={lawsToCompare.map((law) => law.id)} onToggleFollowTopic={handleToggleFollowTopic} followedTopics={userProfile?.followedTopics || []} />
+                <LawFeed laws={feedLaws} allLaws={laws} isLoading={isLoading} error={error} highlightedLawId={selectedLawId} onSave={handleSaveLaw} onVote={handleVote} onComment={handleComment} onPollVote={handlePollVote} onAddImpactStory={handleAddImpactStory} onSaveToCollection={handleSaveToCollection} collections={bookmarkCollections} onCompare={(law) => setLawsToCompare((prev) => prev.find((item) => item.id === law.id) ? prev.filter((item) => item.id !== law.id) : prev.length >= 2 ? [prev[1], law] : [...prev, law])} comparingIds={lawsToCompare.map((law) => law.id)} onToggleFollowTopic={handleToggleFollowTopic} followedTopics={userProfile?.followedTopics || []} />
               </motion.div>
             )}
 
@@ -483,7 +492,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {activeTab === 'map' && <motion.div key="map" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}><MapView laws={laws} onSelectLaw={() => setActiveTab('feed')} /></motion.div>}
+            {activeTab === 'map' && <motion.div key="map" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}><MapView laws={laws} onSelectLaw={(law) => { setSelectedLawId(law.id); setActiveTab('feed'); }} /></motion.div>}
             {activeTab === 'analytics' && <motion.div key="analytics" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}><AnalyticsView laws={laws} collections={bookmarkCollections} /></motion.div>}
             {activeTab === 'roadmap' && <motion.div key="roadmap" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}><RoadmapView /></motion.div>}
           </AnimatePresence>

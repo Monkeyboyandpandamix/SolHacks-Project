@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bookmark, ThumbsUp, ThumbsDown, ChevronDown, ChevronUp, CheckCircle, Clock, AlertTriangle, XCircle, Globe, Map as MapIcon, Building2, Landmark, MessageSquare, Send, BarChart3, Sparkles, BookOpen, Mail, Copy, Check, Volume2, ShieldAlert, CalendarDays, Users } from 'lucide-react';
 import { BookmarkCollection, Law } from '../types';
@@ -15,6 +15,7 @@ interface LawCardProps {
   collections?: BookmarkCollection[];
   onCompare?: (law: Law) => void;
   isComparing?: boolean;
+  isHighlighted?: boolean;
   onToggleFollowTopic?: (topic: string) => void;
   isFollowingTopic?: boolean;
   relatedLaws?: Law[];
@@ -31,6 +32,7 @@ const LawCard: React.FC<LawCardProps> = ({
   collections = [],
   onCompare,
   isComparing,
+  isHighlighted,
   onToggleFollowTopic,
   isFollowingTopic,
   relatedLaws = [],
@@ -43,6 +45,7 @@ const LawCard: React.FC<LawCardProps> = ({
   const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedCollection, setSelectedCollection] = useState(collections[0]?.id || 'default');
+  const cardRef = useRef<HTMLDivElement | null>(null);
 
   const statusIcons = {
     proposed: <Clock size={16} className="text-amber-600" />,
@@ -111,8 +114,14 @@ const LawCard: React.FC<LawCardProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  useEffect(() => {
+    if (!isHighlighted) return;
+    setIsExpanded(true);
+    cardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [isHighlighted]);
+
   return (
-    <motion.div layout className={`relative mb-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm ${isComparing ? 'ring-2 ring-amber-500 ring-offset-2' : ''}`}>
+    <motion.div ref={cardRef} layout className={`relative mb-5 overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm ${isComparing ? 'ring-2 ring-amber-500 ring-offset-2' : ''} ${isHighlighted ? 'ring-2 ring-indigo-500 ring-offset-2' : ''}`}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-[11px] font-medium capitalize text-slate-700">

@@ -1,4 +1,3 @@
-import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import axios from "axios";
 import {
   ChatMessage,
@@ -8,9 +7,6 @@ import {
   Representative,
   RepresentativeVoteRecord,
 } from "../types";
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
-const hasGeminiKey = Boolean(process.env.GEMINI_API_KEY);
 
 const stateCodes: Record<string, string> = {
   Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA", Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA",
@@ -285,8 +281,16 @@ async function applyTranslationToLaws(laws: Law[], targetLanguage: string): Prom
   return translated;
 }
 
+async function postAi<T>(url: string, payload: unknown): Promise<T | null> {
+  try {
+    const response = await axios.post(url, payload);
+    return response.data as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchLaws(state: string, city: string, language: string = "English", userSituation?: string): Promise<Law[]> {
-  const model = "gemini-3-flash-preview";
   const stateCode = stateCodes[state] || state;
 
   const rawData: any = { federal: null, state: null, documents: null, scraped: null };
@@ -307,107 +311,25 @@ export async function fetchLaws(state: string, city: string, language: string = 
     console.warn("External API fetch partially failed, falling back to Gemini search for missing parts", e);
   }
 
-  if (!hasGeminiKey) {
-    return applyTranslationToLaws(enrichLaws(fallbackFromRawData(rawData, state, city), state, city), language);
-  }
-
-  const prompt = `You are a civic information expert. I need to present recent or significant laws, bills, or local ordinances that affect daily life for a resident of ${city}, ${state}.
-  ${userSituation ? `The user's situation is: "${userSituation}". Prioritize laws that are highly relevant to this specific context.` : ""}
-  I have gathered specific raw data from official sources and web scrapers:
-  Federal (Congress.gov): ${JSON.stringify(rawData.federal)}
-  State (Open States): ${JSON.stringify(rawData.state)}
-  Documents (GovInfo): ${JSON.stringify(rawData.documents)}
-  Scraped Local/State Data: ${JSON.stringify(rawData.scraped)}
-  CRITICAL:
-  1. If raw data is provided, use it as the primary source.
-  2. If raw data is missing or insufficient, use your Google Search tool to find the most recent and relevant laws for ${city}, ${state}.
-  3. You MUST return at least 5-8 laws. If you cannot find enough specific local ordinances, include relevant state or federal laws that impact residents of ${city}.
-  4. Ensure the laws are diverse (Housing, Labor, Education, etc.).`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              title: { type: Type.STRING },
-              originalText: { type: Type.STRING },
-              simplifiedSummary: { type: Type.STRING },
-              impact: { type: Type.STRING },
-              personalImpact: { type: Type.STRING },
-              glossary: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    term: { type: Type.STRING },
-                    definition: { type: Type.STRING },
-                  },
-                },
-              },
-              category: { type: Type.STRING },
-              level: { type: Type.STRING, enum: ["federal", "state", "county", "city"] },
-              status: { type: Type.STRING, enum: ["proposed", "passed", "rejected", "updated"] },
-              date: { type: Type.STRING },
-              sourceUrl: { type: Type.STRING },
-            },
-            required: ["id", "title", "originalText", "simplifiedSummary", "impact", "category", "level", "status", "date"],
-          },
-        },
-      },
-    });
-    const laws = JSON.parse(response.text || "[]");
-    return applyTranslationToLaws(enrichLaws(laws, state, city), language);
-  } catch (e) {
-    console.error("Failed to fetch or parse laws", e);
-    return applyTranslationToLaws(enrichLaws(fallbackFromRawData(rawData, state, city), state, city), language);
-  }
+  const fallback = enrichLaws(fallbackFromRawData(rawData, state, city), state, city);
+  const aiResponse = await postAi<{ laws?: Law[] }>("/api/ai/laws", { state, city, userSituation, rawData });
+  const aiLaws = Array.isArray(aiResponse?.laws) && aiResponse.laws.length > 0 ? enrichLaws(aiResponse.laws, state, city) : fallback;
+  return applyTranslationToLaws(aiLaws, language);
 }
 
 export async function generateAdvocacyLetter(law: Law, stance: "support" | "oppose", userSituation?: string): Promise<string> {
-  if (!hasGeminiKey) {
-    return `The Honorable [Representative Name],\n\nI am writing to ${stance === "support" ? "support" : "oppose"} ${law.title}. ${userSituation ? `${userSituation}. ` : ""}${law.impact}\n\nThank you for your attention to this issue.\n\nSincerely,\n[Your Name]`;
-  }
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Draft a professional advocacy letter.
-    Law Title: ${law.title}
-    Position: ${stance}
-    ${userSituation ? `User context: ${userSituation}` : ""}
-    Return only the completed letter.`,
-  });
-  return response.text || "Failed to generate letter. Please try again.";
+  const fallback = `The Honorable [Representative Name],\n\nI am writing to ${stance === "support" ? "support" : "oppose"} ${law.title}. ${userSituation ? `${userSituation}. ` : ""}${law.impact}\n\nThank you for your attention to this issue.\n\nSincerely,\n[Your Name]`;
+  const response = await postAi<{ letter?: string }>("/api/ai/advocacy-letter", { law, stance, userSituation });
+  return response?.letter || fallback;
 }
 
 export async function chatWithLawyer(history: ChatMessage[], message: string, context: Law[], userSituation?: string): Promise<string> {
   const normalizedHistory = history.length > 0 && history[history.length - 1]?.role === "user" && history[history.length - 1]?.text === message
     ? history
     : [...history, { role: "user", text: message }];
-  const conversation = normalizedHistory.map(item => `${item.role === "user" ? "User" : "Assistant"}: ${item.text}`).join("\n");
-
-  if (!hasGeminiKey) {
-    return `Based on the laws currently loaded, compare status, jurisdiction, and who is affected. ${userSituation ? `Given your situation, focus on eligibility, costs, and deadlines. ` : ""}Ask about one law at a time for the clearest answer.`;
-  }
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `You are an AI Civic Assistant.
-    ${userSituation ? `The user's situation is: "${userSituation}".` : ""}
-    Use these laws as context: ${JSON.stringify(context.map(l => ({ id: l.id, title: l.title, summary: l.simplifiedSummary, impact: l.impact, status: l.status })))}.
-    Conversation so far:
-    ${conversation}
-    Assistant:`,
-  });
-
-  return response.text || "I'm sorry, I couldn't process that request.";
+  const fallback = `Based on the laws currently loaded, compare status, jurisdiction, and who is affected. ${userSituation ? `Given your situation, focus on eligibility, costs, and deadlines. ` : ""}Ask about one law at a time for the clearest answer.`;
+  const response = await postAi<{ reply?: string }>("/api/ai/chat", { history: normalizedHistory, message, context, userSituation });
+  return response?.reply || fallback;
 }
 
 export async function translateContent(text: string, targetLanguage: string): Promise<string> {
@@ -421,65 +343,28 @@ export async function translateContent(text: string, targetLanguage: string): Pr
 }
 
 export async function compareLawsWithAI(law1: Law, law2: Law): Promise<string> {
-  const prompt = `Compare the following two laws and provide a concise analysis of their key differences, potential conflicts, and unique impacts.
-  Law 1: ${law1.title}
-  Summary 1: ${law1.simplifiedSummary}
-  Impact 1: ${law1.impact}
-  Law 2: ${law2.title}
-  Summary 2: ${law2.simplifiedSummary}
-  Impact 2: ${law2.impact}`;
-
-  if (!hasGeminiKey) {
-    return `${law1.title} and ${law2.title} affect ${law1.category === law2.category ? law1.category.toLowerCase() : "related policy areas"}, but they differ in scope, status, and jurisdiction. Compare implementation dates, who is covered, and whether one expands or limits obligations created by the other.`;
-  }
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: prompt,
-    config: {
-      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-    },
-  });
-
-  return response.text || "Unable to generate comparative analysis at this time.";
+  const fallback = `${law1.title} and ${law2.title} affect ${law1.category === law2.category ? law1.category.toLowerCase() : "related policy areas"}, but they differ in scope, status, and jurisdiction. Compare implementation dates, who is covered, and whether one expands or limits obligations created by the other.`;
+  const response = await postAi<{ analysis?: string }>("/api/ai/compare", { law1, law2 });
+  return response?.analysis || fallback;
 }
 
 export async function detectConflictBetweenLaws(law1: Law, law2: Law): Promise<ConflictAnalysis> {
-  if (!hasGeminiKey) {
-    const overlaps = [law1.category, law1.level, law2.level].filter(Boolean);
-    const risk: ConflictAnalysis["risk"] =
+  const overlaps = [law1.category, law1.level, law2.level].filter(Boolean);
+  const fallback: ConflictAnalysis = {
+    risk:
       law1.category === law2.category && law1.status !== law2.status ? "medium" :
       law1.level !== law2.level && law1.category === law2.category ? "high" :
-      "low";
-    return {
-      risk,
-      overlaps,
-      summary: risk === "high"
+      "low",
+    overlaps,
+    summary:
+      law1.level !== law2.level && law1.category === law2.category
         ? "These laws cover similar issues at different government levels, so residents may face overlapping or conflicting compliance requirements."
-        : risk === "medium"
-        ? "These laws overlap in policy area, but the conflict appears manageable if timelines and coverage are reviewed carefully."
-        : "These laws appear more complementary than conflicting based on their current scope and status.",
-    };
-  }
-
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Assess whether these two laws conflict. Return JSON with keys risk, summary, overlaps. Law 1: ${law1.title} ${law1.simplifiedSummary}. Law 2: ${law2.title} ${law2.simplifiedSummary}.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          risk: { type: Type.STRING, enum: ["low", "medium", "high"] },
-          summary: { type: Type.STRING },
-          overlaps: { type: Type.ARRAY, items: { type: Type.STRING } },
-        },
-        required: ["risk", "summary", "overlaps"],
-      },
-    },
-  });
-
-  return JSON.parse(response.text || '{"risk":"low","summary":"No clear conflict detected.","overlaps":[]}');
+        : law1.category === law2.category && law1.status !== law2.status
+          ? "These laws overlap in policy area, but the conflict appears manageable if timelines and coverage are reviewed carefully."
+          : "These laws appear more complementary than conflicting based on their current scope and status.",
+  };
+  const response = await postAi<ConflictAnalysis>("/api/ai/conflict", { law1, law2 });
+  return response?.risk ? response : fallback;
 }
 
 export async function moderateComment(text: string): Promise<{ approved: boolean; reason?: string }> {
