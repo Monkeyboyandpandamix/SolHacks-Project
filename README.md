@@ -12,6 +12,75 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 - Community tab with events, neighborhood chat, translators, shelters, legal help, and immigration resources
 - Analytics, map, saved laws, roadmap, digest, and AI assistant views
 
+## App Features
+
+### Navigation Tabs
+
+- Feed
+- Saved Content
+- Profile
+- Map View
+- Weekly Digest
+- Analytics
+- Community
+- Roadmap
+
+### Legislative Feed
+
+- Location-aware feed for the selected `state` and `city`
+- Topic filters including `#Housing`, `#Labor`, `#Education`, `#Immigration`, and `#Health`
+- Primary-interest prioritization
+- Pagination for both the main feed and saved feed
+- Real public source links on each law card
+- Correct `Federal`, `State`, `County`, and `City` badges
+
+### Law Card Actions
+
+- Save and unsave laws
+- Support / oppose voting
+- Comments
+- Community poll voting when a poll is available
+- Share to clipboard
+- Compare up to two laws side by side
+- Follow topic directly from a law card
+- Text-to-speech summary playback
+- Focus mode for reading a law in isolation
+- AI-generated advocacy letter or email draft
+
+### AI Features
+
+- Gemini-powered plain-language summaries
+- AI Civic Assistant chat drawer
+- Personalized context using the user’s saved situation
+- AI law comparison and conflict analysis
+- AI advocacy letter generation
+- Translation support in the feed pipeline
+
+### User Profile
+
+- Sign in with Firebase Auth
+- Save a personal situation/context statement
+- Follow and unfollow legislative topics
+- Store per-user profile data in Firestore
+- Representative cards with contact links
+
+### Community
+
+- Community Events section
+- Neighborhood Chat per location
+- Nearby translators
+- Nearby shelters
+- Lawyers and legal aid listings
+- Immigration help resources
+
+### Insights And Discovery
+
+- Analytics dashboard
+- Map-based exploration
+- Weekly Digest snapshot
+- Roadmap / feature status view
+- In-app notifications for feed and data warnings
+
 ## Key Behaviors
 
 ### Real, Source-Backed Feed
@@ -67,6 +136,22 @@ CivicLens is a location-aware legislative discovery app that combines live gover
 - Scoped per location
 - Requires sign-in to post
 - Publicly readable
+
+## Persistence And Data Flow
+
+### Firestore Usage
+
+- `users/{uid}` stores profile data, user context, and followed topics
+- `laws_cache/{cacheId}` stores canonical location-based law caches
+- `community_rooms/{roomId}/messages/{messageId}` stores neighborhood chat messages
+- `laws/{lawId}/comments/{commentId}` supports structured discussion data
+
+### Cache Strategy
+
+- The app loads Firestore cache first for a location
+- Fresh fetches merge only new or updated laws into the cached dataset
+- Legacy `v2_` and `v3_` cache docs are migrated to `v4_`
+- Stale duplicate cache docs are deleted after successful migration
 
 ## Firebase
 
