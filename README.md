@@ -29,7 +29,7 @@ We built CulturAct as a React + TypeScript application with a Node/Vite server. 
 
 Gemini powers the app's plain-language summaries, comparisons, advocacy-letter generation, translation pipeline, and assistant experiences. That mattered especially for turning dense policy language into something that people from different linguistic and cultural backgrounds could actually use. We also deployed the app on Vultr using Ubuntu, PM2, and Nginx.
 
-For accessibility and language support, we added ElevenLabs-based read-aloud so users can listen to law summaries and highlighted text. We also included a Solana Anchor workspace (`SoH`) for on-chain civic-action recording, designed for flows like proof of signing a petition, recording participation, or issuing future wallet-based civic badges.
+For accessibility and language support, we added ElevenLabs-based read-aloud so users can listen to law summaries and highlighted text. We also connected a Solana Anchor workspace (`SoH`) to the live React app so users can connect a wallet in the profile tab, inspect wallet state on devnet, request test SOL, record civic actions on-chain, and read those civic action receipts back from the blockchain.
 
 ## Challenges we ran into
 
@@ -50,7 +50,8 @@ For accessibility and language support, we added ElevenLabs-based read-aloud so 
 - Deployed the project to Vultr and got the full stack running behind Nginx with PM2.
 - Built interactive civic learning modules, not just a feed reader.
 - Framed legislation through culture-centered issue areas so the product speaks to identity, language, heritage, and belonging instead of treating policy as abstract bureaucracy.
-- Added a Solana Anchor workspace for verifiable civic-action flows instead of limiting the project to traditional web-only participation.
+- Connected the Solana Anchor program to the live app so users can record civic participation with a wallet-signed transaction instead of keeping that activity only in a centralized web session.
+- Generated the real Anchor IDL and type artifacts and wired the React app to the actual Solana program shape instead of a mock or placeholder contract layer.
 
 ## What we learned
 
@@ -69,7 +70,7 @@ Next for CulturAct:
 - add richer demographic overlays from Census data
 - integrate higher-quality voice features and multilingual civic storytelling
 - deepen the culture-focused experience with stronger community narratives, localized impact analysis, and richer language-access workflows
-- connect the Solana civic-actions program to the live React app for wallet-based proof of participation and civic badges
+- expand the Solana civic-actions flow into richer badge, campaign, and coalition-participation experiences
 - move from prototype deployment toward a stricter production runtime
 
 ## Built with
@@ -97,6 +98,7 @@ Next for CulturAct:
 - Official U.S. Senate vote sources
 - Solana
 - Anchor
+- Solana Wallet Adapter
 - ElevenLabs API
 
 ## Which of the following AI tools did you use this weekend?
@@ -129,7 +131,7 @@ ElevenLabs made the project more accessible by turning written policy summaries 
 
 ## Solana / SoH Workspace
 
-This repo also includes a Solana Anchor workspace under [`SoH/`](./SoH). In this project, Solana is being used specifically for verifiable civic-action infrastructure rather than generic crypto features.
+This repo includes a Solana Anchor workspace under [`SoH/`](./SoH), and it is now connected to the main React app. In this project, Solana is being used specifically for verifiable civic-action infrastructure rather than generic crypto features.
 
 ### How Solana Is Being Utilized
 
@@ -137,12 +139,44 @@ The Solana side of the project is built around the idea of recording meaningful 
 
 In CulturAct, Solana is intended to support:
 
-- recording a civic action on-chain, such as signing a petition or completing an advocacy action
-- creating verifiable proof that a user participated in a community or civic workflow
-- supporting future wallet-based civic badges, reputation markers, or participation receipts
-- giving community-oriented actions a durable record beyond a normal web session or centralized database alone
+- recording a civic action on-chain, such as petition support, advocacy outreach, or community participation
+- creating verifiable proof that a user completed a civic workflow inside the app
+- giving community-oriented actions a durable receipt beyond a normal web session or centralized database alone
+- supporting future wallet-based civic badges, coalition participation records, and campaign milestones
 
-The current Anchor program in `SoH/programs/civic-actions/src/lib.rs` records a user, an action type, and a timestamp in a PDA-backed on-chain account. That means the project already has the foundation for:
+### How Solana Works Inside The App
+
+The Solana flow is available directly in the **Profile** tab of the React app.
+
+1. The app wraps the UI with a Solana wallet provider using Phantom and Solflare on **devnet**.
+2. The user connects a wallet through the in-app wallet button.
+3. The app loads the connected wallet address, devnet balance, and previously recorded on-chain civic action accounts.
+4. The user can request devnet SOL directly from the profile tab for testing.
+5. The user selects a civic action such as:
+   - `Record Petition Support`
+   - `Record Advocacy Action`
+   - `Record Community Participation`
+6. The frontend derives a PDA for that action and submits a transaction to the `civic_actions` Anchor program.
+7. When the transaction succeeds, the app shows a Solana Explorer link so the action can be verified publicly on devnet.
+8. The same profile panel can then reload and display the wallet's on-chain civic action history.
+
+This means the app is not just “Solana-ready.” It already uses Solana as an active participation layer inside the user experience.
+
+### On-Chain Data Model
+
+The Anchor program in `SoH/programs/civic-actions/src/lib.rs` records:
+
+- the user's wallet public key
+- the action type
+- the timestamp
+
+Each civic action is stored in a PDA-backed account derived from:
+
+- the static seed `action`
+- the user's public key
+- the action type
+
+That means the project already has the foundation for:
 
 - “I signed this petition”
 - “I completed this civic action”
@@ -150,11 +184,37 @@ The current Anchor program in `SoH/programs/civic-actions/src/lib.rs` records a 
 
 This makes Solana useful here not as a speculative feature, but as a way to make civic participation portable, transparent, and verifiable.
 
+### App Files That Power The Solana Flow
+
+- `src/components/SolanaWalletProvider.tsx`: wraps the app with Solana connection and wallet state
+- `src/components/SolanaCivicActions.tsx`: renders the wallet connect UI, devnet balance, airdrop action, record-action buttons, and on-chain history in the profile tab
+- `src/solana/config.ts`: stores the devnet RPC endpoint, program ID, and frontend IDL that now matches the generated Anchor artifacts
+- `src/main.tsx`: mounts the wallet provider around the app
+- `src/App.tsx`: places the civic-action UI inside the profile experience
+- `SoH/programs/civic-actions/src/lib.rs`: Anchor program that stores civic action accounts on-chain
+- `SoH/target/idl/civic_actions.json`: generated Anchor IDL artifact from the real program build
+- `SoH/target/types/civic_actions.ts`: generated TypeScript program types from the real program build
+
+### Why Solana Fits This Project
+
+For CulturAct, the point of Solana is not cryptocurrency speculation. It is civic proof.
+
+It lets the app move beyond “I clicked a button on a website” toward:
+
+- public proof that a civic action happened
+- portable participation records not locked inside one database
+- a foundation for community badges, organizer workflows, and coalition accountability
+- user-owned identity around civic and cultural participation
+
 ### What `SoH` Contains
 
 - `SoH/programs/civic-actions/src/lib.rs`: Anchor program for recording civic actions
 - `SoH/tests/anchor.ts`: Anchor test for PDA-based civic action creation
 - `SoH/client/client.ts`: simple client script for checking provider, program ID, and wallet balance
+- `SoH/client/programConfig.ts`: shared local program config so the CLI client can reach the deployed program cleanly
+- `src/components/SolanaCivicActions.tsx`: live frontend civic-action flow connected to the Anchor program
+- `src/components/SolanaWalletProvider.tsx`: wallet connection layer for the React app
+- `src/solana/config.ts`: frontend Solana network and program configuration
 
 ### Local Solana Setup Commands
 
@@ -184,7 +244,8 @@ You will need:
 - Solana CLI configured
 - Anchor CLI installed
 - a local keypair at `~/.config/solana/id.json`
-- local validator or the appropriate Anchor provider target
+- `ANCHOR_PROVIDER_URL=https://api.devnet.solana.com`
+- `ANCHOR_WALLET=~/.config/solana/id.json`
 
 Example Solana configuration:
 
@@ -194,6 +255,49 @@ solana config get
 solana airdrop 2
 solana balance
 ```
+
+Shell environment used on this machine:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+export ANCHOR_PROVIDER_URL="https://api.devnet.solana.com"
+export ANCHOR_WALLET="$HOME/.config/solana/id.json"
+```
+
+### Using The Solana Flow In The App
+
+1. Open the app and go to the **Profile** tab.
+2. Click the wallet connect button.
+3. Connect Phantom or Solflare on **devnet**.
+4. Optionally request devnet SOL if the wallet needs test funds.
+5. Pick one of the civic action buttons.
+6. Approve the transaction in the wallet.
+7. Open the returned Explorer link to verify the action receipt.
+8. Use the same panel to refresh and view the wallet's recorded civic actions.
+
+If the program is not deployed, the wallet transaction will fail. The frontend expects the `civic_actions` Anchor program to be deployed on devnet at the configured program ID.
+
+### Solana Verification Status
+
+The Solana flow has been verified locally with:
+
+```bash
+npm run solana:build
+npm run solana:client
+```
+
+After the fixed Anchor build, the workspace now generates:
+
+- `SoH/target/idl/civic_actions.json`
+- `SoH/target/types/civic_actions.ts`
+
+That means:
+
+- the Anchor program builds successfully
+- the generated Solana artifacts exist
+- the CLI client can reach the deployed program on devnet
+- the React app is wired to the real program shape
+- the frontend wallet flow is connected to the live Solana program, not just a placeholder interface
 
 ## Current Scope
 
@@ -262,6 +366,8 @@ solana balance
 - Save ZIP code for more accurate U.S. House representative lookup
 - Follow and unfollow standard civic topics and cultural impact tags
 - Store per-user profile data in Firestore
+- Connect a Solana wallet with Phantom or Solflare
+- Record on-chain civic actions as wallet-signed participation receipts
 - Representative cards with contact links
 - Live federal representative lookup using Google Civic and Congress-aware fallback logic
 - Recent official voting history from House Clerk and U.S. Senate vote sources

@@ -1,44 +1,38 @@
-import * as web3 from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import React, { useState } from "react";
-import { WalletMultiButton, useWallet } from "@solana/wallet-adapter-react";
-import * as anchor from "@coral-xyz/anchor";
-import { getProgram, getActionPDA } from "./programClient";import type { CivicActions } from "../target/types/civic_actions";
-
-// Configure the client to use the local cluster
-anchor.setProvider(anchor.AnchorProvider.env());
-
-const program = anchor.workspace.CivicActions as anchor.Program<CivicActions>;
-
-
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { getActionPDA, getProgram } from "./programClient";
 
 export default function App() {
+  const { connection } = useConnection();
   const wallet = useWallet();
   const [status, setStatus] = useState<string>("");
 
   const recordCivicAction = async () => {
-    if (!wallet.connected || !wallet.publicKey) return;
+    if (!wallet.publicKey || !wallet.signTransaction || !wallet.signAllTransactions) {
+      setStatus("Connect a wallet that supports signing first.");
+      return;
+    }
 
     try {
       setStatus("Processing transaction...");
 
-      // Create provider
       const provider = new anchor.AnchorProvider(
-        (wallet as any).connection,
-        wallet as any,
-        {}
+        connection,
+        {
+          publicKey: wallet.publicKey,
+          signTransaction: wallet.signTransaction,
+          signAllTransactions: wallet.signAllTransactions,
+        },
+        { commitment: "confirmed" }
       );
 
       const program = getProgram(provider);
-
-      // Example action type
-      const actionType = "signed_petition_" + Date.now();
-
-      // Compute PDA
+      const actionType = `signed_petition_${Date.now()}`;
       const actionPDA = await getActionPDA(wallet.publicKey, actionType);
 
-      // Send transaction
-      const tx = await program.methods
+      const signature = await program.methods
         .recordAction(actionType)
         .accounts({
           actionAccount: actionPDA,
@@ -47,15 +41,15 @@ export default function App() {
         })
         .rpc();
 
-      setStatus(`Action recorded! Transaction: ${tx}`);
-    } catch (err) {
-      console.error(err);
-      setStatus("Failed to record action");
+      setStatus(`Action recorded: ${signature}`);
+    } catch (error) {
+      console.error(error);
+      setStatus("Failed to record action.");
     }
   };
 
   return (
-    <div style={{ padding: "2rem" }}>
+    <div style={{ padding: "2rem", fontFamily: "system-ui, sans-serif" }}>
       <h1>Civic Actions Demo</h1>
       <WalletMultiButton />
 

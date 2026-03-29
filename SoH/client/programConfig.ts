@@ -5,7 +5,7 @@ export const CIVIC_ACTIONS_PROGRAM_ID = new PublicKey(
   "7mLLxJS9dsoEGMdCZjx5tfxpGzera62zCYqRszBDuMPt"
 );
 
-const CIVIC_ACTIONS_IDL = {
+export const CIVIC_ACTIONS_IDL = {
   address: CIVIC_ACTIONS_PROGRAM_ID.toBase58(),
   metadata: {
     name: "civic_actions",
@@ -20,6 +20,13 @@ const CIVIC_ACTIONS_IDL = {
         {
           name: "actionAccount",
           writable: true,
+          pda: {
+            seeds: [
+              { kind: "const", value: [97, 99, 116, 105, 111, 110] },
+              { kind: "account", path: "user" },
+              { kind: "arg", path: "actionType" },
+            ],
+          },
         },
         {
           name: "user",
@@ -45,16 +52,33 @@ const CIVIC_ACTIONS_IDL = {
       discriminator: [122, 152, 210, 252, 236, 206, 133, 181],
     },
   ],
+  types: [
+    {
+      name: "civicAction",
+      type: {
+        kind: "struct",
+        fields: [
+          {
+            name: "user",
+            type: "pubkey",
+          },
+          {
+            name: "actionType",
+            type: "string",
+          },
+          {
+            name: "timestamp",
+            type: "i64",
+          },
+        ],
+      },
+    },
+  ],
 } as const;
 
-export function getProgram(provider: anchor.AnchorProvider) {
-  return new anchor.Program(CIVIC_ACTIONS_IDL as anchor.Idl, provider);
-}
-
-export async function getActionPDA(userPubkey: PublicKey, actionType: string) {
-  const [pda] = await PublicKey.findProgramAddress(
-    [Buffer.from("action"), userPubkey.toBuffer(), Buffer.from(actionType)],
-    CIVIC_ACTIONS_PROGRAM_ID
+export function getCivicActionsProgram(provider: anchor.AnchorProvider) {
+  return new anchor.Program(
+    CIVIC_ACTIONS_IDL as anchor.Idl,
+    provider
   );
-  return pda;
 }
