@@ -136,11 +136,24 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem(SETTINGS_STORAGE_KEY) || localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
-    return saved ? JSON.parse(saved) : {
+    const parsed = saved ? JSON.parse(saved) : null;
+    
+    const langMap: Record<string, string> = {
+      "English": "en", "Spanish": "es", "Chinese": "zh-CN", "Myanmar": "my",
+      "Tagalog": "tl", "Vietnamese": "vi", "Arabic": "ar", "French": "fr",
+      "Korean": "ko", "Russian": "ru"
+    };
+
+    let defaultLang = "en";
+    if (parsed && parsed.language) {
+      defaultLang = langMap[parsed.language] || parsed.language;
+    }
+
+    return parsed ? { ...parsed, language: defaultLang } : {
       highContrast: false,
       fontSize: 'medium',
       underlineLinks: false,
-      language: "English",
+      language: "en",
       location: {
         state: "California",
         city: "San Francisco"
@@ -359,6 +372,33 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     localStorage.removeItem(LEGACY_SETTINGS_STORAGE_KEY);
+    
+    // Handle Translation Cookie
+    const targetLang = settings.language || 'en';
+    const currentCookieMatch = document.cookie.match(/(?:^|;)\s*googtrans=([^;]*)/);
+    const currentCookie = currentCookieMatch ? currentCookieMatch[1] : null;
+    const expectedCookieVal = `/en/${targetLang}`;
+    
+    let needsReload = false;
+    
+    if (targetLang === 'en') {
+      // If we are switching back to English but the cookie currently has another language
+      if (currentCookie && currentCookie !== '/en/en' && currentCookie !== 'null') {
+        document.cookie = 'googtrans=/en/en; path=/';
+        document.cookie = 'googtrans=/en/en; domain=' + window.location.hostname + '; path=/';
+        needsReload = true;
+      }
+    } else {
+      if (currentCookie !== expectedCookieVal) {
+        document.cookie = `googtrans=${expectedCookieVal}; path=/`;
+        document.cookie = `googtrans=${expectedCookieVal}; domain=${window.location.hostname}; path=/`;
+        needsReload = true;
+      }
+    }
+
+    if (needsReload) {
+      window.location.reload();
+    }
     
     // Apply accessibility classes to body
     document.body.classList.toggle('high-contrast', settings.highContrast);

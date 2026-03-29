@@ -13,7 +13,15 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notifications, onMarkRead, onClearAll }) => {
   const [showNotifications, setShowNotifications] = useState(false);
-  const languages = ["English", "Spanish", "Chinese", "Tagalog", "Vietnamese", "Arabic", "French"];
+  const languages = [
+    { id: 'en', label: 'English' },
+    { id: 'es', label: 'Español' },
+    { id: 'zh-CN', label: '中文' },
+    { id: 'tl', label: 'Tagalog' },
+    { id: 'vi', label: 'Tiếng Việt' },
+    { id: 'ar', label: 'العربية' },
+    { id: 'fr', label: 'Français' }
+  ];
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -35,7 +43,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
               className="rounded-md border border-border-color bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-accent-color"
             >
               {languages.map(lang => (
-                <option key={lang} value={lang}>{lang}</option>
+                <option key={lang.id} value={lang.id}>{lang.label}</option>
               ))}
             </select>
           </div>

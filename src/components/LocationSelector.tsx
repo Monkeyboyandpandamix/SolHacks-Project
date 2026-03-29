@@ -138,16 +138,16 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
   ];
 
   const languages = [
-    { id: 'English', label: 'English' },
-    { id: 'Spanish', label: 'Español' },
-    { id: 'Chinese', label: '中文' },
-    { id: 'Myanmar', label: 'မြန်မာ' },
-    { id: 'Tagalog', label: 'Tagalog' },
-    { id: 'Vietnamese', label: 'Tiếng Việt' },
-    { id: 'Arabic', label: 'العربية' },
-    { id: 'French', label: 'Français' },
-    { id: 'Korean', label: '한국어' },
-    { id: 'Russian', label: 'Русский' },
+    { id: 'en', label: 'English' },
+    { id: 'es', label: 'Español' },
+    { id: 'zh-CN', label: '中文' },
+    { id: 'my', label: 'မြန်မာ' },
+    { id: 'tl', label: 'Tagalog' },
+    { id: 'vi', label: 'Tiếng Việt' },
+    { id: 'ar', label: 'العربية' },
+    { id: 'fr', label: 'Français' },
+    { id: 'ko', label: '한국어' },
+    { id: 'ru', label: 'Русский' },
   ];
 
   return (

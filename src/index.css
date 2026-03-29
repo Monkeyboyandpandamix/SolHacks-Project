@@ -83,3 +83,28 @@ html:has(body.underline-links) button {
   text-decoration: underline !important;
   text-underline-offset: 4px !important;
 }
+
+/* Hide Google Translate Widget & Banner */
+body {
+  top: 0 !important;
+}
+
+.skiptranslate iframe {
+  display: none !important;
+}
+
+#google_translate_element,
+.goog-te-banner-frame {
+  display: none !important;
+}
+
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
