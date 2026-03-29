@@ -5,6 +5,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 import * as cheerio from "cheerio";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { getLanguageLabel, normalizeLanguageCode } from "./src/constants/languages";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config();
@@ -531,15 +532,17 @@ async function fetchHearings(state: string, city: string) {
 }
 
 async function translateTexts(texts: string[], targetLanguage: string) {
-  if (!process.env.GEMINI_API_KEY || targetLanguage === "English") {
+  const languageCode = normalizeLanguageCode(targetLanguage);
+  if (!process.env.GEMINI_API_KEY || languageCode === "en") {
     return texts;
   }
+  const languageLabel = getLanguageLabel(languageCode);
   const response = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
     {
       contents: [{
         parts: [{
-          text: `Translate each item in this JSON array into ${targetLanguage}. Return JSON only. Input: ${JSON.stringify(texts)}`,
+          text: `Translate each item in this JSON array into ${languageLabel}. Return JSON only. Input: ${JSON.stringify(texts)}`,
         }],
       }],
       generationConfig: {

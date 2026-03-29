@@ -75,7 +75,7 @@ This project fits the Culture track because it focuses on how laws shape languag
 - Personalized context using the user’s saved situation
 - AI law comparison and conflict analysis
 - AI advocacy letter generation
-- Translation support in the feed pipeline
+- Translation support in the feed pipeline, including Farsi (`فارسی`)
 
 ### User Profile
 

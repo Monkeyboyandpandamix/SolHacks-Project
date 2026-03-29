@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Sun, Moon, Type, Globe, Bell, Check, Trash2 } from 'lucide-react';
 import { UserSettings, Notification } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { SUPPORTED_LANGUAGES } from '../constants/languages';
 
 interface HeaderProps {
   settings: UserSettings;

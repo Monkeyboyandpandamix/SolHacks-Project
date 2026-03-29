@@ -32,6 +32,7 @@ export const STATE_ABBR: Record<string, string> = {
 };
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
+import { SUPPORTED_LANGUAGES, normalizeLanguageCode } from '../constants/languages';
 
 interface LocationSelectorProps {
   onLocationChange: (state: string, city: string, language: string) => void;
@@ -45,7 +46,7 @@ interface LocationSelectorProps {
 const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, onInterestChange, initialState, initialCity, initialLanguage, initialInterest = 'all' }) => {
   const [state, setState] = useState(initialState);
   const [city, setCity] = useState(initialCity);
-  const [language, setLanguage] = useState(initialLanguage);
+  const [language, setLanguage] = useState(normalizeLanguageCode(initialLanguage));
   const [interest, setInterest] = useState(initialInterest);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -130,10 +131,10 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
   ];
 
   const states = [
-    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "Florida", "Georgia", 
-    "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", 
-    "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey", 
-    "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Puerto Rico", "Rhode Island", "South Carolina", 
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", "Delaware", "Florida", "Georgia",
+    "Hawaii", "Idaho", "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland",
+    "Massachusetts", "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
+    "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Puerto Rico", "Rhode Island", "South Carolina",
     "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "Washington D.C.", "West Virginia", "Wisconsin", "Wyoming"
   ];
 
@@ -170,113 +171,113 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-1 relative" ref={stateDropdownRef}>
-            <label className="text-xs font-medium text-muted">State/Territory</label>
-            <button 
-              onClick={() => setShowStateDropdown(!showStateDropdown)}
-              className="flex items-center justify-between rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color text-left"
-            >
-              <div className="flex items-center gap-2">
-                {STATE_FLAGS[state] && (
-                  <img src={getFlagUrl(STATE_FLAGS[state], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[state], 40)} 2x`} width="20" alt={`${state} flag`} className="rounded-sm shadow-sm" />
-                )}
-                <span>{state} ({STATE_ABBR[state]})</span>
-              </div>
-              <ChevronDown size={14} className="text-muted" />
-            </button>
+        <div className="flex flex-col gap-1 relative" ref={stateDropdownRef}>
+          <label className="text-xs font-medium text-muted">State/Territory</label>
+          <button
+            onClick={() => setShowStateDropdown(!showStateDropdown)}
+            className="flex items-center justify-between rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color text-left"
+          >
+            <div className="flex items-center gap-2">
+              {STATE_FLAGS[state] && (
+                <img src={getFlagUrl(STATE_FLAGS[state], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[state], 40)} 2x`} width="20" alt={`${state} flag`} className="rounded-sm shadow-sm" />
+              )}
+              <span>{state} ({STATE_ABBR[state]})</span>
+            </div>
+            <ChevronDown size={14} className="text-muted" />
+          </button>
+          <AnimatePresence>
+            {showStateDropdown && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="absolute left-0 right-0 top-[105%] z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-border-color bg-white shadow-xl custom-scrollbar"
+              >
+                {states.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => { setState(s); setShowStateDropdown(false); }}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                  >
+                    {STATE_FLAGS[s] ? (
+                      <img src={getFlagUrl(STATE_FLAGS[s], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[s], 40)} 2x`} width="20" alt={`${s} flag`} className="rounded-sm shadow-sm" />
+                    ) : (
+                      <div className="w-[20px]" />
+                    )}
+                    <span>{s} ({STATE_ABBR[s]})</span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">City / County</label>
+          <div className="relative" ref={suggestionRef}>
+            <input
+              type="text"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+              placeholder="Enter city or county"
+              className="w-full rounded-lg border border-border-color bg-transparent px-3 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-accent-color"
+            />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            {isSearching && (
+              <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-accent-color" />
+            )}
+
             <AnimatePresence>
-              {showStateDropdown && (
-                <motion.div 
+              {showSuggestions && suggestions.length > 0 && (
+                <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute left-0 right-0 top-[105%] z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-border-color bg-white shadow-xl custom-scrollbar"
+                  className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border-color bg-white shadow-xl"
                 >
-                  {states.map((s) => (
+                  {suggestions.map((s, idx) => (
                     <button
-                      key={s}
-                      onClick={() => { setState(s); setShowStateDropdown(false); }}
-                      className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
+                      key={idx}
+                      onClick={() => selectSuggestion(s)}
+                      className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                     >
-                      {STATE_FLAGS[s] ? (
-                        <img src={getFlagUrl(STATE_FLAGS[s], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[s], 40)} 2x`} width="20" alt={`${s} flag`} className="rounded-sm shadow-sm" />
-                      ) : (
-                        <div className="w-[20px]" />
-                      )}
-                      <span>{s} ({STATE_ABBR[s]})</span>
+                      {s}
                     </button>
                   ))}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted">City / County</label>
-            <div className="relative" ref={suggestionRef}>
-              <input 
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-                placeholder="Enter city or county"
-                className="w-full rounded-lg border border-border-color bg-transparent px-3 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-accent-color"
-              />
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              {isSearching && (
-                <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-accent-color" />
-              )}
-              
-              <AnimatePresence>
-                {showSuggestions && suggestions.length > 0 && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border-color bg-white shadow-xl"
-                  >
-                    {suggestions.map((s, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => selectSuggestion(s)}
-                        className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted">Primary Interest</label>
-            <select 
-              value={interest}
-              onChange={(e) => handleInterestChange(e.target.value)}
-              className="rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color"
-            >
-              {interests.map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-muted">Preferred Language</label>
-            <select 
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color"
-            >
-              {languages.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-            </select>
-          </div>
-          <div className="md:col-span-2">
-            <button 
-              onClick={handleUpdate}
-              className="btn-primary flex w-full items-center justify-center gap-2"
-            >
-              <Navigation size={18} />
-              Update Feed
-            </button>
-          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">Primary Interest</label>
+          <select
+            value={interest}
+            onChange={(e) => handleInterestChange(e.target.value)}
+            className="rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color"
+          >
+            {interests.map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">Preferred Language</label>
+          <select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+            className="rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color"
+          >
+            {languages.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+          </select>
+        </div>
+        <div className="md:col-span-2">
+          <button
+            onClick={handleUpdate}
+            className="btn-primary flex w-full items-center justify-center gap-2"
+          >
+            <Navigation size={18} />
+            Update Feed
+          </button>
+        </div>
       </div>
     </div>
   );
