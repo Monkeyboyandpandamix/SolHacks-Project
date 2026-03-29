@@ -94,6 +94,15 @@ const RepresentativeCard: React.FC<RepresentativeCardProps> = ({ representative 
           </div>
         </div>
       )}
+
+      {(!representative.votingRecord || representative.votingRecord.length === 0) && (
+        <div className="mt-6 rounded-3xl border border-slate-100 bg-slate-50 p-5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Voting Record Snapshot</p>
+          <p className="mt-3 text-[11px] font-bold leading-relaxed text-slate-500">
+            Recent official voting history is not available for this representative yet.
+          </p>
+        </div>
+      )}
     </motion.div>
   );
 };

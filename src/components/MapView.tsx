@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowRight, Building2, Landmark, MapPin } from 'lucide-react';
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
 import { Law } from '../types';
 
 interface MapViewProps {
@@ -17,9 +17,24 @@ type StateCenter = {
   short: string;
 };
 
+type StateFeature = {
+  type: 'Feature';
+  properties: {
+    name: string;
+  };
+  geometry: GeoJSON.Geometry;
+};
+
+type StateFeatureCollection = {
+  type: 'FeatureCollection';
+  features: StateFeature[];
+};
+
 const US_CENTER: [number, number] = [39.8283, -98.5795];
 const US_ZOOM = 4;
 const SELECTED_ZOOM = 6;
+const HEAT_GRADIENT = ['#ecfeff', '#a5f3fc', '#38bdf8', '#2563eb', '#7c3aed', '#be123c'];
+const STATE_GEOJSON_URL = 'https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json';
 
 const STATE_CENTERS: Record<string, StateCenter> = {
   Alabama: { lat: 32.8067, lng: -86.7911, short: 'AL' },
@@ -83,6 +98,23 @@ const scopeMatches = (law: Law, filter: ScopeFilter) => {
   return law.level === 'city' || law.level === 'county';
 };
 
+const interpolateColor = (value: number) => {
+  const clamped = Math.max(0, Math.min(1, value));
+  const scaled = clamped * (HEAT_GRADIENT.length - 1);
+  const lowerIndex = Math.floor(scaled);
+  const upperIndex = Math.min(HEAT_GRADIENT.length - 1, lowerIndex + 1);
+  const mix = scaled - lowerIndex;
+  const lower = HEAT_GRADIENT[lowerIndex];
+  const upper = HEAT_GRADIENT[upperIndex];
+
+  const toRgb = (hex: string) => hex.match(/\w\w/g)?.map((part) => parseInt(part, 16)) || [0, 0, 0];
+  const [r1, g1, b1] = toRgb(lower);
+  const [r2, g2, b2] = toRgb(upper);
+  const channel = (start: number, end: number) => Math.round(start + (end - start) * mix);
+
+  return `rgb(${channel(r1, r2)}, ${channel(g1, g2)}, ${channel(b1, b2)})`;
+};
+
 const MapViewport: React.FC<{ selectedState: string | null }> = ({ selectedState }) => {
   const map = useMap();
 
@@ -109,6 +141,56 @@ const MapViewport: React.FC<{ selectedState: string | null }> = ({ selectedState
 const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>('all');
   const [selectedState, setSelectedState] = useState<string | null>(laws.find((law) => law.location.state)?.location.state || null);
+  const [statePopulations, setStatePopulations] = useState<Record<string, number>>({});
+  const [stateShapes, setStateShapes] = useState<StateFeatureCollection | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStatePopulations = async () => {
+      try {
+        const response = await fetch('/api/census/state-populations');
+        const data = await response.json();
+        if (!cancelled && data?.populations) {
+          setStatePopulations(data.populations);
+        }
+      } catch {
+        if (!cancelled) {
+          setStatePopulations({});
+        }
+      }
+    };
+
+    loadStatePopulations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStateShapes = async () => {
+      try {
+        const response = await fetch(STATE_GEOJSON_URL);
+        const data = await response.json();
+        if (!cancelled) {
+          setStateShapes(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setStateShapes(null);
+        }
+      }
+    };
+
+    loadStateShapes();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const stateTotals = useMemo(() => {
     return laws.reduce((acc: Record<string, number>, law) => {
@@ -126,25 +208,33 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
     });
   }, [laws, scopeFilter, selectedState]);
 
-  const maxStateCount = Math.max(...(Object.values(stateTotals) as number[]), 1);
   const federalCount = laws.filter((law) => law.level === 'federal').length;
 
   const mapStates = useMemo(() => {
-    return Object.entries(stateTotals)
-      .filter(([state]) => Boolean(STATE_CENTERS[state]))
-      .map(([state, count]) => ({
+    const stateNames = Object.keys(STATE_CENTERS).filter((state) => state !== 'Washington D.C.');
+    return stateNames.map((state) => {
+      const count = stateTotals[state] || 0;
+      const population = statePopulations[state] || 0;
+      const density = population > 0 ? (count / population) * 100000 : 0;
+      return {
         state,
         count,
+        population,
+        density,
         center: STATE_CENTERS[state],
-      }));
-  }, [stateTotals]);
+      };
+    });
+  }, [statePopulations, stateTotals]);
+
+  const maxStateCount = Math.max(...mapStates.map((entry) => entry.count), 1);
+  const maxDensity = Math.max(...mapStates.map((entry) => entry.density), 0.01);
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-semibold tracking-tight text-slate-950">Map view</h2>
         <p className="max-w-2xl text-sm leading-6 text-slate-500">
-          Explore where the legislation in your feed is coming from on a real OpenStreetMap layer. Select a state bubble or the federal marker to filter the list.
+          Explore where the legislation in your feed is coming from on a real OpenStreetMap layer. Select a state region or the federal marker to filter the list.
         </p>
       </div>
 
@@ -153,7 +243,7 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-slate-900">United States legislation map</p>
-              <p className="text-xs text-slate-500">Bubble size reflects how many loaded laws are tied to each state.</p>
+              <p className="text-xs text-slate-500">Heat color reflects loaded laws per 100k residents using U.S. Census ACS population data.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {[
@@ -175,6 +265,22 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
             </div>
           </div>
 
+          <div className="mb-5 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Heat Legend</p>
+                <p className="mt-1 text-xs text-slate-500">Low intensity to high intensity by laws per 100k residents.</p>
+              </div>
+              <div className="min-w-[220px]">
+                <div className="h-3 rounded-full" style={{ background: `linear-gradient(90deg, ${HEAT_GRADIENT.join(', ')})` }} />
+                <div className="mt-2 flex justify-between text-[11px] font-semibold text-slate-500">
+                  <span>0</span>
+                  <span>{maxDensity.toFixed(2)} / 100k</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="overflow-hidden rounded-[24px] border border-slate-200">
             <MapContainer
               center={US_CENTER}
@@ -190,9 +296,41 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
               />
               <MapViewport selectedState={selectedState} />
 
-              {mapStates.map(({ state, count, center }) => {
+              {stateShapes && (
+                <GeoJSON
+                  data={stateShapes as GeoJSON.GeoJsonObject}
+                  style={(feature) => {
+                    const stateName = feature?.properties?.name;
+                    const match = mapStates.find((entry) => entry.state === stateName);
+                    const countRatio = (match?.count || 0) / maxStateCount;
+                    const densityRatio = (match?.density || 0) / maxDensity;
+                    const heatValue = (match?.count || 0) === 0 ? 0.03 : Math.min(1, (countRatio * 0.45) + (densityRatio * 0.55));
+
+                    return {
+                      color: stateName === selectedState ? '#0f172a' : '#ffffff',
+                      weight: stateName === selectedState ? 2.4 : 1.2,
+                      fillColor: interpolateColor(heatValue),
+                      fillOpacity: 0.78,
+                    };
+                  }}
+                  eventHandlers={{
+                    click: (event) => {
+                      const layer = event.propagatedFrom as { feature?: StateFeature };
+                      const stateName = layer?.feature?.properties?.name;
+                      if (stateName) {
+                        setSelectedState((current) => current === stateName ? null : stateName);
+                      }
+                    },
+                  }}
+                />
+              )}
+
+              {mapStates.map(({ state, count, center, density, population }) => {
                 const isActive = selectedState === state;
-                const radius = 10 + (count / maxStateCount) * 16;
+                const countRatio = count / maxStateCount;
+                const densityRatio = density / maxDensity;
+                const heatValue = count === 0 ? 0.03 : Math.min(1, (countRatio * 0.45) + (densityRatio * 0.55));
+                const radius = 4 + countRatio * 8;
                 return (
                   <CircleMarker
                     key={state}
@@ -201,8 +339,8 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
                     pathOptions={{
                       color: '#ffffff',
                       weight: 2,
-                      fillColor: isActive ? '#0f172a' : '#2563eb',
-                      fillOpacity: isActive ? 0.92 : 0.78,
+                      fillColor: isActive ? '#111827' : interpolateColor(heatValue),
+                      fillOpacity: isActive ? 0.98 : 0.9,
                     }}
                     eventHandlers={{
                       click: () => setSelectedState((current) => current === state ? null : state),
@@ -212,6 +350,8 @@ const MapView: React.FC<MapViewProps> = ({ laws, onSelectLaw }) => {
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-slate-900">{state}</p>
                         <p className="text-xs text-slate-600">{count} loaded law{count === 1 ? '' : 's'}</p>
+                        <p className="text-xs text-slate-600">{density.toFixed(2)} laws per 100k residents</p>
+                        <p className="text-xs text-slate-500">Population: {population > 0 ? population.toLocaleString() : 'Unavailable'}</p>
                       </div>
                     </Popup>
                   </CircleMarker>

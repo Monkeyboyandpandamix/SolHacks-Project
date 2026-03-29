@@ -5,7 +5,6 @@ import {
   HearingEvent,
   Law,
   Representative,
-  RepresentativeVoteRecord,
 } from "../types";
 import { getLanguageLabel, normalizeLanguageCode } from "../constants/languages";
 
@@ -683,14 +682,6 @@ export async function moderateComment(text: string): Promise<{ approved: boolean
   return { approved: true };
 }
 
-function fallbackVotingRecord(laws: Law[], stance: RepresentativeVoteRecord["stance"]): RepresentativeVoteRecord[] {
-  return laws.slice(0, 3).map(law => ({
-    billTitle: law.title,
-    stance,
-    note: `Tracking ${law.category.toLowerCase()} implications for constituents.`,
-  }));
-}
-
 export function getRepresentativesForLocation(state: string, laws: Law[]): Representative[] {
   const topBills = laws.slice(0, 3).map(law => law.id);
   const byState: Record<string, Representative[]> = {
@@ -706,7 +697,26 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.padilla.senate.gov"],
         channels: [{ type: "Twitter", id: "AlexPadilla4CA" }],
         sponsoredBills: topBills,
-        votingRecord: fallbackVotingRecord(laws, "support"),
+      },
+      {
+        id: "ca-sen-schiff",
+        name: "Adam Schiff",
+        office: "U.S. Senator",
+        party: "Democrat",
+        photoUrl: "https://www.congress.gov/img/member/s001150_200.jpg",
+        emails: ["https://www.schiff.senate.gov/contact/email-adam/"],
+        phones: ["(202) 224-3841"],
+        urls: ["https://www.schiff.senate.gov"],
+        channels: [{ type: "Twitter", id: "SenAdamSchiff" }],
+        sponsoredBills: topBills,
+      },
+      {
+        id: "ca-house-lookup",
+        name: "Find Your U.S. Representative",
+        office: "U.S. Representative",
+        party: "Lookup Required",
+        urls: ["https://www.house.gov/representatives/find-your-representative"],
+        sponsoredBills: topBills,
       },
     ],
     "North Carolina": [
@@ -721,7 +731,26 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.tillis.senate.gov"],
         channels: [{ type: "Twitter", id: "SenThomTillis" }],
         sponsoredBills: topBills,
-        votingRecord: fallbackVotingRecord(laws, "watching"),
+      },
+      {
+        id: "nc-sen-budd",
+        name: "Ted Budd",
+        office: "U.S. Senator",
+        party: "Republican",
+        photoUrl: "https://www.congress.gov/img/member/b001305_200.jpg",
+        emails: ["https://www.budd.senate.gov/contact/"],
+        phones: ["(202) 224-3154"],
+        urls: ["https://www.budd.senate.gov"],
+        channels: [{ type: "Twitter", id: "SenTedBuddNC" }],
+        sponsoredBills: topBills,
+      },
+      {
+        id: "nc-house-lookup",
+        name: "Find Your U.S. Representative",
+        office: "U.S. Representative",
+        party: "Lookup Required",
+        urls: ["https://www.house.gov/representatives/find-your-representative"],
+        sponsoredBills: topBills,
       },
     ],
   };
@@ -732,7 +761,6 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
     party: "Nonpartisan",
     urls: ["https://www.usa.gov/elected-officials"],
     sponsoredBills: topBills,
-    votingRecord: fallbackVotingRecord(laws, "watching"),
   }];
 }
 

@@ -35,17 +35,27 @@ import axios from 'axios';
 import { normalizeLanguageCode } from '../constants/languages';
 
 interface LocationSelectorProps {
-  onLocationChange: (state: string, city: string, language: string) => void;
+  onLocationChange: (state: string, city: string, language: string, zipCode: string) => void;
   onInterestChange: (interest: string) => void;
   initialState: string;
   initialCity: string;
+  initialZip?: string;
   initialLanguage: string;
   initialInterest?: string;
 }
 
-const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, onInterestChange, initialState, initialCity, initialLanguage, initialInterest = 'all' }) => {
+const LocationSelector: React.FC<LocationSelectorProps> = ({
+  onLocationChange,
+  onInterestChange,
+  initialState,
+  initialCity,
+  initialZip = '',
+  initialLanguage,
+  initialInterest = 'all',
+}) => {
   const [state, setState] = useState(initialState);
   const [city, setCity] = useState(initialCity);
+  const [zipCode, setZipCode] = useState(initialZip);
   const [language, setLanguage] = useState(normalizeLanguageCode(initialLanguage));
   const [interest, setInterest] = useState(initialInterest);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -54,6 +64,13 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
   const [showStateDropdown, setShowStateDropdown] = useState(false);
   const suggestionRef = useRef<HTMLDivElement>(null);
   const stateDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setState(initialState);
+    setCity(initialCity);
+    setZipCode(initialZip || '');
+    setLanguage(normalizeLanguageCode(initialLanguage));
+  }, [initialState, initialCity, initialZip, initialLanguage]);
 
   useEffect(() => {
     const handleClickOutsideState = (event: MouseEvent) => {
@@ -98,7 +115,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
   }, [city, state]);
 
   const handleUpdate = () => {
-    onLocationChange(state, city, language);
+    onLocationChange(state, city, language, zipCode.replace(/[^\d-]/g, ''));
   };
 
   const selectSuggestion = (s: string) => {
@@ -232,6 +249,20 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
               )}
             </AnimatePresence>
           </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-muted">ZIP code</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="postal-code"
+            maxLength={10}
+            value={zipCode}
+            onChange={(e) => setZipCode(e.target.value.replace(/[^\d-]/g, ''))}
+            placeholder="e.g. 27215"
+            className="w-full rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color"
+          />
+          <p className="text-[11px] text-muted">Used to find your U.S. House member and local context. Optional but recommended.</p>
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted">Primary Interest</label>

@@ -49,7 +49,7 @@ import CommunityView from './components/CommunityView';
 import ProtestGuide from './components/ProtestGuide';
 import { normalizeLanguageCode, SUPPORTED_LANGUAGES } from './constants/languages';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
-import { fetchLaws, mergeCanonicalLaws } from './services/geminiService';
+import { fetchLaws, fetchRepresentativesForAddress, getRepresentativesForLocation, mergeCanonicalLaws } from './services/geminiService';
 
 import { auth, db, signIn, logOut, onAuthStateChanged, handleFirestoreError, OperationType } from './firebase';
 import { collection, deleteDoc, doc, getDoc, setDoc, getDocs, Timestamp } from 'firebase/firestore';
@@ -157,7 +157,8 @@ export default function App() {
       language: "en",
       location: {
         state: "California",
-        city: "San Francisco"
+        city: "San Francisco",
+        zipCode: undefined,
       },
       interests: []
     };
@@ -174,6 +175,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [lawsToCompare, setLawsToCompare] = useState<Law[]>([]);
+  const [representatives, setRepresentatives] = useState<Representative[]>(() => getRepresentativesForLocation('California', []));
+  const [isLoadingRepresentatives, setIsLoadingRepresentatives] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -414,15 +417,68 @@ export default function App() {
     document.body.classList.toggle('underline-links', !!settings.underlineLinks);
   }, [settings]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRepresentatives = async () => {
+      const zipCode =
+        settings.location.zipCode?.trim() || userProfile?.location?.zipCode?.trim();
+      const stateAbbr = STATE_ABBR[settings.location.state] || settings.location.state;
+      const address = zipCode
+        ? `${zipCode}, ${stateAbbr}, USA`
+        : [settings.location.city, settings.location.state, 'USA'].filter(Boolean).join(', ');
+      const fallbackRepresentatives = getRepresentativesForLocation(settings.location.state, laws);
+      setRepresentatives(fallbackRepresentatives);
+      setIsLoadingRepresentatives(true);
+      try {
+        const nextRepresentatives = await fetchRepresentativesForAddress(address, settings.location.state, laws);
+        if (!cancelled) {
+          setRepresentatives(nextRepresentatives.length > 0 ? nextRepresentatives : fallbackRepresentatives);
+        }
+      } catch {
+        if (!cancelled) {
+          setRepresentatives(fallbackRepresentatives);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingRepresentatives(false);
+        }
+      }
+    };
+
+    loadRepresentatives();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.location.city, settings.location.state, settings.location.zipCode, userProfile?.location?.zipCode, laws]);
+
   const handleSaveSituation = async (situation: string) => {
     if (!user) {
       signIn();
       return;
     }
     try {
-      const updatedProfile = { ...userProfile!, situation, lastUpdated: new Date().toISOString() };
+      const mergedZip =
+        userProfile?.location?.zipCode?.trim() || settings.location.zipCode?.trim() || undefined;
+      const updatedProfile = {
+        ...userProfile!,
+        situation,
+        location: {
+          ...settings.location,
+          zipCode: mergedZip,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
       await setDoc(doc(db, 'users', user.uid), updatedProfile);
       setUserProfile(updatedProfile);
+      setSettings((prev) => ({
+        ...prev,
+        location: {
+          ...prev.location,
+          zipCode: mergedZip,
+        },
+      }));
       loadLaws(); // Reload laws with new context
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
@@ -450,10 +506,11 @@ export default function App() {
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
-  const handleLocationChange = (state: string, city: string, language: string) => {
+  const handleLocationChange = (state: string, city: string, language: string, zip: string) => {
+    const zipCode = zip.trim() || undefined;
     setSettings(prev => ({
       ...prev,
-      location: { state, city },
+      location: { state, city, zipCode },
       language
     }));
   };
@@ -641,7 +698,7 @@ export default function App() {
               { id: 'workflow', icon: Network, label: 'LAW WORKFLOW' },
               { id: 'simulation', icon: Scale, label: 'COURT SIMULATOR' },
               { id: 'bill_simulator', icon: PlayCircle, label: 'BILL SIMULATOR' },
-              { id: 'protest_guide', icon: ShieldCheck, label: 'PROTEST GUIDE' },
+              { id: 'protest_guide', icon: ShieldCheck, label: 'SAFETY GUIDE' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -728,7 +785,9 @@ export default function App() {
             >
               <MapPin size={16} className="text-indigo-600" />
               <span className="text-xs font-black text-slate-900">
-                {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state} (${STATE_ABBR[settings.location.state]})` : `${settings.location.state} (${STATE_ABBR[settings.location.state]})`}
+                {settings.location.city?.trim()
+                  ? `${settings.location.city}, ${settings.location.state} (${STATE_ABBR[settings.location.state]})${settings.location.zipCode?.trim() ? ` · ${settings.location.zipCode.trim()}` : ''}`
+                  : `${settings.location.state} (${STATE_ABBR[settings.location.state]})${settings.location.zipCode?.trim() ? ` · ${settings.location.zipCode.trim()}` : ''}`}
               </span>
             </button>
             <div className="relative">
@@ -929,10 +988,11 @@ export default function App() {
                 <LocationSelector
                   initialState={settings.location.state}
                   initialCity={settings.location.city}
+                  initialZip={settings.location.zipCode || ''}
                   initialLanguage={settings.language}
                   initialInterest={settings.interests[0] || 'all'}
-                  onLocationChange={(state, city, language) => {
-                    handleLocationChange(state, city, language);
+                  onLocationChange={(state, city, language, zipCode) => {
+                    handleLocationChange(state, city, language, zipCode);
                     setShowLocationSelector(false);
                   }}
                   onInterestChange={handlePrimaryInterestChange}
@@ -1010,7 +1070,10 @@ export default function App() {
                         <img src={getFlagUrl(STATE_FLAGS[settings.location.state], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[settings.location.state], 40)} 2x`} width="20" alt={`${settings.location.state} flag`} className="rounded-sm shadow-sm" />
                       )}
                       <span>
-                        {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state} (${STATE_ABBR[settings.location.state]})` : `${settings.location.state} (${STATE_ABBR[settings.location.state]})`}.
+                        {settings.location.city?.trim()
+                          ? `${settings.location.city}, ${settings.location.state} (${STATE_ABBR[settings.location.state]})${settings.location.zipCode?.trim() ? ` · ${settings.location.zipCode.trim()}` : ''}`
+                          : `${settings.location.state} (${STATE_ABBR[settings.location.state]})${settings.location.zipCode?.trim() ? ` · ${settings.location.zipCode.trim()}` : ''}`}
+                        .
                       </span>
                     </p>
                   </div>
@@ -1191,6 +1254,31 @@ export default function App() {
                         value={userProfile?.situation || ''}
                         onChange={(e) => setUserProfile(prev => prev ? { ...prev, situation: e.target.value } : null)}
                       />
+                      <div className="mt-6">
+                        <label className="mb-2 block text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
+                          ZIP Code For U.S. House Lookup
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={10}
+                          placeholder="e.g., 27514"
+                          className="w-full rounded-3xl border-2 border-slate-100 bg-slate-50 p-5 text-sm font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
+                          value={userProfile?.location?.zipCode || ''}
+                          onChange={(e) =>
+                            setUserProfile(prev => prev ? {
+                              ...prev,
+                              location: {
+                                ...prev.location,
+                                zipCode: e.target.value.replace(/[^\d-]/g, ''),
+                              },
+                            } : null)
+                          }
+                        />
+                        <p className="mt-2 text-xs font-bold text-slate-400">
+                          City and state are enough for senators, but the U.S. House member usually needs a ZIP code or full street address.
+                        </p>
+                      </div>
                       <button
                         onClick={() => handleSaveSituation(userProfile?.situation || '')}
                         className="mt-6 rounded-2xl bg-indigo-600 px-10 py-5 text-sm font-black text-white shadow-xl shadow-indigo-100 transition-all hover:scale-[1.02]"
@@ -1234,34 +1322,23 @@ export default function App() {
                         </div>
                         <div>
                           <h3 className="text-2xl font-black tracking-tight text-indigo-950">Your Representatives</h3>
-                          <p className="font-bold text-slate-400 text-sm">Direct connection to your elected officials.</p>
+                          <p className="font-bold text-slate-400 text-sm">Direct connection to your elected officials. Add a ZIP code above to resolve your exact U.S. House member.</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-1 gap-6">
-                        {[
-                          {
-                            name: 'Jeff Jackson',
-                            office: 'U.S. Representative',
-                            party: 'Democrat',
-                            photoUrl: 'https://www.congress.gov/img/member/j000308_200.jpg',
-                            emails: ['contact@jackson.house.gov'],
-                            phones: ['(202) 225-5634'],
-                            urls: ['https://jeffjackson.house.gov'],
-                            channels: [{ type: 'Twitter', id: 'JeffJacksonNC' }, { type: 'Facebook', id: 'JeffJacksonNC' }]
-                          },
-                          {
-                            name: 'Thom Tillis',
-                            office: 'U.S. Senator',
-                            party: 'Republican',
-                            photoUrl: 'https://www.congress.gov/img/member/t000476_200.jpg',
-                            emails: ['contact@tillis.senate.gov'],
-                            phones: ['(202) 224-6342'],
-                            urls: ['https://www.tillis.senate.gov'],
-                            channels: [{ type: 'Twitter', id: 'SenThomTillis' }]
-                          }
-                        ].map((rep, idx) => (
-                          <RepresentativeCard key={idx} representative={rep as any} />
+                        {isLoadingRepresentatives && (
+                          <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 text-sm font-bold text-slate-400 shadow-xl shadow-slate-200/40">
+                            Loading representatives and voting history...
+                          </div>
+                        )}
+                        {!isLoadingRepresentatives && representatives.map((rep) => (
+                          <RepresentativeCard key={rep.id} representative={rep} />
                         ))}
+                        {!isLoadingRepresentatives && representatives.length === 0 && (
+                          <div className="rounded-[32px] border-2 border-slate-100 bg-white p-8 text-sm font-bold text-slate-400 shadow-xl shadow-slate-200/40">
+                            No representatives are available for this location right now.
+                          </div>
+                        )}
                       </div>
                     </section>
                   </div>

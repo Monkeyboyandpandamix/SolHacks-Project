@@ -377,88 +377,394 @@ function currentCongress() {
   return String(Math.max(118, baseCongress + offset));
 }
 
-async function fetchVotingRecord(memberId: string) {
-  const apiKey = process.env.PROPUBLICA_API_KEY;
-  if (!apiKey) return [];
+function refreshRuntimeEnv() {
+  dotenv.config({ path: ".env.local", override: true });
+  dotenv.config({ override: true });
+}
+
+/** USPS state FIPS (first two digits of county/cousub GEOID) → two-letter state code */
+const FIPS_TO_STATE: Record<string, string> = {
+  "01": "AL", "02": "AK", "04": "AZ", "05": "AR", "06": "CA", "08": "CO", "09": "CT", "10": "DE", "11": "DC", "12": "FL",
+  "13": "GA", "15": "HI", "16": "ID", "17": "IL", "18": "IN", "19": "IA", "20": "KS", "21": "KY", "22": "LA", "23": "ME",
+  "24": "MD", "25": "MA", "26": "MI", "27": "MN", "28": "MS", "29": "MO", "30": "MT", "31": "NE", "32": "NV", "33": "NH",
+  "34": "NJ", "35": "NM", "36": "NY", "37": "NC", "38": "ND", "39": "OH", "40": "OK", "41": "OR", "42": "PA", "44": "RI",
+  "45": "SC", "46": "SD", "47": "TN", "48": "TX", "49": "UT", "50": "VT", "51": "VA", "53": "WA", "54": "WV", "55": "WI", "56": "WY",
+};
+
+function extractUsZip5(address: string): string | null {
+  const m = String(address).match(/\b(\d{5})(?:-\d{4})?\b/);
+  return m ? m[1] : null;
+}
+
+async function fetchLatLonFromZip(zip5: string): Promise<{ lat: number; lon: number; stateAbbr: string } | null> {
   try {
-    const congress = currentCongress();
-    const response = await axios.get(`https://api.propublica.org/congress/v1/members/${memberId}/votes.json`, {
-      headers: { "X-API-Key": apiKey },
-      timeout: 6000,
+    const { data } = await axios.get(`https://api.zippopotam.us/us/${zip5}`, { timeout: 6000 });
+    const place = data?.places?.[0];
+    if (!place) return null;
+    return {
+      lat: parseFloat(place.latitude),
+      lon: parseFloat(place.longitude),
+      stateAbbr: String(place["state abbreviation"] || "").toUpperCase(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseCongressionalDistrictFromGeographies(geographies: Record<string, unknown>): { stateAbbr: string; district: number } | null {
+  const cdKey = Object.keys(geographies || {}).find((k) => /\d+(st|th|nd|rd)\s+Congressional\s+Districts/i.test(k));
+  if (!cdKey) return null;
+  const row = (geographies as any)[cdKey]?.[0];
+  if (!row || typeof row !== "object") return null;
+
+  const cdField = Object.keys(row).find((k) => /^CD\d+$/i.test(k));
+  let district = 0;
+  if (cdField && row[cdField] !== undefined && row[cdField] !== null) {
+    district = parseInt(String(row[cdField]), 10);
+    if (Number.isNaN(district)) district = 0;
+  } else if (typeof row.BASENAME === "string" && /^\d+$/.test(row.BASENAME)) {
+    district = parseInt(row.BASENAME, 10);
+  }
+
+  const stateFips = String(row.STATE ?? "").padStart(2, "0");
+  const stateAbbr = FIPS_TO_STATE[stateFips];
+  if (!stateAbbr) return null;
+  return { stateAbbr, district };
+}
+
+function dedupeRepresentativesById(reps: any[]) {
+  const seen = new Set<string>();
+  return reps.filter((r) => {
+    const key = String(r.bioguideId || r.id || r.name);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function fetchCongressGovSponsoredActivitySnapshot(
+  bioguideId: string,
+  apiKey: string,
+): Promise<Array<{ billTitle: string; stance: "support" | "oppose" | "watching"; note: string }>> {
+  try {
+    const { data } = await axios.get(`https://api.congress.gov/v3/member/${bioguideId}/sponsored-legislation`, {
+      params: { api_key: apiKey, format: "json", limit: 5 },
+      timeout: 8000,
     });
-    const results = response.data?.results?.[0]?.votes || response.data?.results || [];
-    return results.slice(0, 5).map((vote: any) => ({
-      billTitle: vote.description || vote.bill?.title || vote.question || "Recent vote",
-      stance: vote.position === "Yes" ? "support" : vote.position === "No" ? "oppose" : "watching",
-      note: `${vote.position || "Tracked"} on ${vote.date || "recent vote"}`,
+    const bills = data?.sponsoredLegislation || [];
+    return bills.map((bill: any) => ({
+      billTitle: cleanText(bill.title || `${bill.type || ""} ${bill.number || ""}`.trim()) || "Legislation",
+      stance: "watching" as const,
+      note: cleanText(bill.latestAction?.text || bill.policyArea?.name || "Recent legislative activity"),
     }));
   } catch (error: any) {
-    console.error("ProPublica voting record error:", error.message);
+    console.error("Congress.gov sponsored activity snapshot error:", error.message);
     return [];
   }
 }
 
-async function enrichRepresentativeWithProPublica(rep: any, officeName: string, divisionId?: string) {
-  const apiKey = process.env.PROPUBLICA_API_KEY;
-  if (!apiKey) return { ...rep, votingRecord: [] };
-
-  const state = rep.address?.[0]?.state || divisionId?.match(/state:([a-z]{2})/i)?.[1]?.toUpperCase();
-  const isSenate = /senator/i.test(officeName);
-  const districtMatch = divisionId?.match(/cd:(\d+)/i);
-  const district = districtMatch ? String(Number(districtMatch[1])) : undefined;
-  if (!state || (!isSenate && !district)) {
-    return { ...rep, votingRecord: [] };
-  }
-
+async function congressMemberDetailToRepresentative(
+  bioguideId: string,
+  officeName: string,
+  apiKey: string,
+): Promise<any | null> {
+  if (!apiKey) return null;
   try {
-    const chamber = isSenate ? "senate" : "house";
-    const url = isSenate
-      ? `https://api.propublica.org/congress/v1/members/${chamber}/${state}/current.json`
-      : `https://api.propublica.org/congress/v1/members/${chamber}/${state}/${district}/current.json`;
-    const response = await axios.get(url, {
-      headers: { "X-API-Key": apiKey },
-      timeout: 6000,
+    const { data } = await axios.get(`https://api.congress.gov/v3/member/${bioguideId}`, {
+      params: { api_key: apiKey, format: "json" },
+      timeout: 8000,
     });
-    const candidates = response.data?.results || [];
-    const matched = candidates.find((candidate: any) => {
-      const candidateName = normalizeName(candidate.name || `${candidate.first_name || ""} ${candidate.last_name || ""}`);
-      const repName = normalizeName(rep.name || "");
-      return candidateName === repName || candidateName.includes(repName) || repName.includes(candidateName);
-    }) || candidates[0];
-
-    if (!matched?.id) {
-      return { ...rep, votingRecord: [] };
-    }
-
-    const votingRecord = await fetchVotingRecord(matched.id);
-    return {
-      ...rep,
-      propublicaId: matched.id,
-      votingRecord,
+    const m = data?.member;
+    if (!m) return null;
+    const party = m.partyHistory?.[0]?.partyName || m.partyName || "Nonpartisan";
+    const name = m.directOrderName || m.name || m.invertedOrderName || bioguideId;
+    const phones = m.addressInformation?.phoneNumber ? [String(m.addressInformation.phoneNumber)] : [];
+    const urls = m.officialWebsiteUrl ? [String(m.officialWebsiteUrl)] : [];
+    const representative = {
+      id: bioguideId,
+      bioguideId,
+      name,
+      office: officeName,
+      role: officeName,
+      party,
+      photoUrl: m.depiction?.imageUrl,
+      emails: [] as string[],
+      phones,
+      urls,
+      channels: [] as { type: string; id: string }[],
+      contact: {
+        phone: phones[0],
+        website: urls[0],
+      },
+      sponsoredBills: [] as string[],
     };
+    return enrichRepresentativeWithOfficialVoting(representative, officeName, apiKey);
   } catch (error: any) {
-    console.error("ProPublica member lookup error:", error.message);
-    return { ...rep, votingRecord: [] };
+    console.error("Congress.gov member detail error:", error.message);
+    return null;
   }
 }
 
-async function fetchRepresentativesByAddress(address: string) {
-  const civicKey = process.env.GOOGLE_CIVIC_API_KEY;
-  if (!civicKey) return [];
-  const response = await axios.get("https://www.googleapis.com/civicinfo/v2/representatives", {
-    params: {
-      address,
-      includeOffices: true,
-      key: civicKey,
-    },
-    timeout: 6000,
+async function fetchRepresentativesViaCongressGov(address: string, apiKey: string): Promise<any[]> {
+  const zip5 = extractUsZip5(address);
+  if (!zip5) {
+    console.warn("Congress.gov fallback: no 5-digit ZIP in address; cannot resolve district.");
+    return [];
+  }
+
+  const loc = await fetchLatLonFromZip(zip5);
+  if (!loc) return [];
+
+  let parsed: { stateAbbr: string; district: number } | null = null;
+  try {
+    const { data } = await axios.get("https://geocoding.geo.census.gov/geocoder/geographies/coordinates", {
+      params: {
+        x: loc.lon,
+        y: loc.lat,
+        benchmark: "Public_AR_Current",
+        vintage: "Current_Current",
+        format: "json",
+      },
+      timeout: 8000,
+    });
+    parsed = parseCongressionalDistrictFromGeographies(data?.result?.geographies || {});
+  } catch (error: any) {
+    console.error("Census geocoder error:", error.message);
+  }
+
+  const stateAbbr = parsed?.stateAbbr || loc.stateAbbr;
+  if (!stateAbbr) return [];
+
+  const district = parsed?.district ?? 0;
+  const congress = currentCongress();
+  const results: any[] = [];
+
+  try {
+    const senRes = await axios.get(`https://api.congress.gov/v3/member/congress/${congress}/${stateAbbr}`, {
+      params: { currentMember: true, api_key: apiKey, format: "json", limit: 250 },
+      timeout: 12000,
+    });
+    const members = senRes.data?.members || [];
+    const senators = members.filter((mem: any) => {
+      if (mem.district !== undefined && mem.district !== null) return false;
+      const terms = mem.terms?.item || [];
+      return terms.some((t: any) => t.chamber === "Senate");
+    });
+    for (const mem of senators) {
+      const id = mem.bioguideId;
+      if (!id) continue;
+      const rep = await congressMemberDetailToRepresentative(id, "U.S. Senator", apiKey);
+      if (rep) results.push(rep);
+    }
+  } catch (error: any) {
+    console.error("Congress.gov senate lookup error:", error.message);
+  }
+
+  try {
+    const houseRes = await axios.get(`https://api.congress.gov/v3/member/congress/${congress}/${stateAbbr}/${district}`, {
+      params: { currentMember: true, api_key: apiKey, format: "json", limit: 10 },
+      timeout: 12000,
+    });
+    const houseMembers = houseRes.data?.members || [];
+    for (const mem of houseMembers) {
+      const id = mem.bioguideId;
+      if (!id) continue;
+      const rep = await congressMemberDetailToRepresentative(id, "U.S. Representative", apiKey);
+      if (rep) results.push(rep);
+    }
+  } catch (error: any) {
+    console.error("Congress.gov house lookup error:", error.message);
+  }
+
+  return dedupeRepresentativesById(results);
+}
+
+function currentSession() {
+  return new Date().getFullYear() % 2 === 1 ? "1" : "2";
+}
+
+function extractLastName(value: string) {
+  return normalizeName(value)
+    .replace(/\b(jr|sr|ii|iii|iv|v)\b/g, "")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .slice(-1)[0] || "";
+}
+
+function namesMatch(candidate: string, target: string) {
+  const candidateName = normalizeName(candidate);
+  const targetName = normalizeName(target);
+  if (!candidateName || !targetName) return false;
+  if (candidateName === targetName) return true;
+  if (candidateName.includes(targetName) || targetName.includes(candidateName)) return true;
+  return extractLastName(candidateName) === extractLastName(targetName);
+}
+
+function mapVotePositionToStance(position: string) {
+  const normalized = position.trim().toLowerCase();
+  if (/(yea|yes|aye|guilty)/.test(normalized)) return "support";
+  if (/(nay|no|not guilty)/.test(normalized)) return "oppose";
+  return "watching";
+}
+
+function cleanText(value?: string | null) {
+  return (value || "").replace(/\s+/g, " ").trim();
+}
+
+async function fetchRecentHouseVoteUrls() {
+  const response = await axios.get("https://clerk.house.gov/Votes", { timeout: 8000 });
+  const $ = cheerio.load(response.data);
+  const urls: string[] = [];
+
+  $("a[href]").each((_, el) => {
+    const href = $(el).attr("href");
+    if (!href) return;
+    if (!/\/Votes\//i.test(href)) return;
+    if (href === "/Votes" || href === "/Votes/") return;
+    urls.push(new URL(href, "https://clerk.house.gov").toString());
   });
 
-  const offices = response.data?.offices || [];
-  const officials = response.data?.officials || [];
+  return [...new Set(urls)].slice(0, 10);
+}
+
+async function fetchRecentSenateVoteUrls() {
+  const congress = currentCongress();
+  const sessions = [currentSession(), currentSession() === "1" ? "2" : "1"];
+  const urls: string[] = [];
+
+  for (const session of sessions) {
+    try {
+      const response = await axios.get(
+        `https://www.senate.gov/legislative/LIS/roll_call_lists/vote_menu_${congress}_${session}.htm`,
+        { timeout: 8000 },
+      );
+      const $ = cheerio.load(response.data);
+      $("a[href]").each((_, el) => {
+        const href = $(el).attr("href");
+        if (!href) return;
+        if (!/\/legislative\/LIS\/roll_call_votes\/vote\d+\/vote_\d+_\d+_\d+\.htm/i.test(href)) return;
+        urls.push(new URL(href, "https://www.senate.gov").toString());
+      });
+      if (urls.length > 0) break;
+    } catch {
+      continue;
+    }
+  }
+
+  return [...new Set(urls)].slice(0, 10);
+}
+
+async function fetchHouseVotingRecord(memberName: string) {
+  try {
+    const voteUrls = await fetchRecentHouseVoteUrls();
+    const records: Array<{ billTitle: string; stance: "support" | "oppose" | "watching"; note: string }> = [];
+
+    for (const url of voteUrls) {
+      const response = await axios.get(url, { timeout: 8000 });
+      const $ = cheerio.load(response.data);
+      const pageTitle = cleanText($("h1").first().text()) || cleanText($("title").text()) || "Recent House vote";
+      const pageText = cleanText($("body").text());
+      const dateMatch = pageText.match(/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}, \d{4}\b/i);
+
+      let matchedPosition = "";
+      $("table tr").each((_, row) => {
+        const cells = $(row).find("th, td").map((__, cell) => cleanText($(cell).text())).get().filter(Boolean);
+        if (cells.length < 2 || matchedPosition) return;
+        const possibleName = cells[0];
+        const possibleVote = cells[cells.length - 1];
+        if (namesMatch(possibleName, memberName)) {
+          matchedPosition = possibleVote;
+        }
+      });
+
+      if (!matchedPosition) continue;
+
+      records.push({
+        billTitle: pageTitle.replace(/\s*\|\s*Bill Number:.*$/i, ""),
+        stance: mapVotePositionToStance(matchedPosition),
+        note: `${matchedPosition} on ${dateMatch?.[0] || "recent House roll call"} via Clerk of the House`,
+      });
+
+      if (records.length >= 5) break;
+    }
+
+    return records;
+  } catch (error: any) {
+    console.error("House voting record error:", error.message);
+    return [];
+  }
+}
+
+async function fetchSenateVotingRecord(memberName: string) {
+  try {
+    const voteUrls = await fetchRecentSenateVoteUrls();
+    const records: Array<{ billTitle: string; stance: "support" | "oppose" | "watching"; note: string }> = [];
+
+    for (const url of voteUrls) {
+      const response = await axios.get(url, { timeout: 8000 });
+      const $ = cheerio.load(response.data);
+      const pageText = $("body").text();
+      const compactText = cleanText(pageText);
+      const questionMatch = compactText.match(/Question:\s*(.+?)\s*(?:Vote Number:|Vote Date:|Required For Majority:)/i);
+      const measureTitleMatch = compactText.match(/Measure Title:\s*(.+?)\s*(?:Vote Counts:|Vote Summary|By Senator Name)/i);
+      const dateMatch = compactText.match(/Vote Date:\s*([A-Za-z]+\s+\d{1,2},\s+\d{4}(?:,\s+\d{1,2}:\d{2}\s+[AP]M)?)/i);
+      const lines = pageText.split("\n").map((line) => cleanText(line)).filter(Boolean);
+
+      const memberLine = lines.find((line) => {
+        const [namePart] = line.split(",");
+        return namesMatch(namePart.replace(/\([^)]+\)/g, ""), memberName);
+      });
+
+      if (!memberLine) continue;
+
+      const position = memberLine.split(",").slice(-1)[0]?.trim() || "Tracked";
+      records.push({
+        billTitle: measureTitleMatch?.[1] || questionMatch?.[1] || "Recent Senate vote",
+        stance: mapVotePositionToStance(position),
+        note: `${position} on ${dateMatch?.[1] || "recent Senate roll call"} via U.S. Senate`,
+      });
+
+      if (records.length >= 5) break;
+    }
+
+    return records;
+  } catch (error: any) {
+    console.error("Senate voting record error:", error.message);
+    return [];
+  }
+}
+
+async function enrichRepresentativeWithOfficialVoting(rep: any, officeName: string, congressApiKey?: string) {
+  if (!/u\.s\. senator|senator|u\.s\. representative|representative/i.test(officeName)) {
+    return { ...rep, votingRecord: [] };
+  }
+
+  refreshRuntimeEnv();
+  const congressKey = congressApiKey || process.env.CONGRESS_GOV_API_KEY;
+
+  const isSenate = /senator/i.test(officeName);
+  let votingRecord = isSenate
+    ? await fetchSenateVotingRecord(rep.name || "")
+    : await fetchHouseVotingRecord(rep.name || "");
+
+  if (votingRecord.length === 0 && rep.bioguideId && congressKey) {
+    votingRecord = await fetchCongressGovSponsoredActivitySnapshot(rep.bioguideId, congressKey);
+  }
+
+  return {
+    ...rep,
+    votingRecord,
+  };
+}
+
+async function mapCivicResponseToRepresentatives(data: any): Promise<any[]> {
+  const offices = data?.offices || [];
+  const officials = data?.officials || [];
+  const federalOffices = offices.filter((office: any) => /u\.s\.\s+senator|u\.s\.\s+representative/i.test(office.name || ""));
 
   const mapped = await Promise.all(
-    offices.flatMap((office: any) =>
+    federalOffices.flatMap((office: any) =>
       (office.officialIndices || []).map(async (index: number) => {
         const official = officials[index];
         if (!official) return null;
@@ -481,12 +787,49 @@ async function fetchRepresentativesByAddress(address: string) {
           },
           sponsoredBills: [],
         };
-        return enrichRepresentativeWithProPublica(representative, office.name, office.divisionId);
+        return enrichRepresentativeWithOfficialVoting(representative, office.name);
       })
     )
   );
 
   return mapped.filter(Boolean);
+}
+
+async function fetchRepresentativesByAddress(address: string) {
+  refreshRuntimeEnv();
+  const civicKey = process.env.GOOGLE_CIVIC_API_KEY;
+  const congressKey = process.env.CONGRESS_GOV_API_KEY || "DEMO_KEY";
+  if (!process.env.CONGRESS_GOV_API_KEY) {
+    console.warn(
+      "[representatives] CONGRESS_GOV_API_KEY is not set; using Congress.gov DEMO_KEY (low rate limits). Add CONGRESS_GOV_API_KEY to .env.local for reliable lookups.",
+    );
+  }
+
+  if (civicKey) {
+    try {
+      const response = await axios.get("https://www.googleapis.com/civicinfo/v2/representatives", {
+        params: {
+          address,
+          includeOffices: true,
+          key: civicKey,
+        },
+        timeout: 6000,
+      });
+      const mapped = await mapCivicResponseToRepresentatives(response.data);
+      if (mapped.length > 0) return mapped;
+    } catch (error: any) {
+      console.error("Google Civic API Error:", error.message);
+    }
+  }
+
+  try {
+    const fallback = await fetchRepresentativesViaCongressGov(address, congressKey);
+    if (fallback.length > 0) return fallback;
+  } catch (error: any) {
+    console.error("Congress.gov representative fallback error:", error.message);
+  }
+
+  return [];
 }
 
 async function fetchHearings(state: string, city: string) {

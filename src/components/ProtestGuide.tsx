@@ -421,7 +421,7 @@ export default function ProtestGuide() {
           onClick={() => setActiveTab('guide')}
           className={`flex-1 py-4 text-sm font-black tracking-widest uppercase transition-all z-10 rounded-2xl ${activeTab === 'guide' ? 'text-indigo-950' : 'text-slate-500 hover:text-indigo-600'}`}
         >
-          Protest Guide
+          Safety Guide
         </button>
         <button
           onClick={() => setActiveTab('simulation')}

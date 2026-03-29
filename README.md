@@ -84,6 +84,7 @@ This project fits the Culture track because it focuses on how laws shape languag
 - Follow and unfollow standard civic topics and cultural impact tags
 - Store per-user profile data in Firestore
 - Representative cards with contact links
+- Live representative voting history using `GOOGLE_CIVIC_API_KEY` plus official House and Senate vote sources
 
 ### Community
 
@@ -259,7 +260,6 @@ Required or strongly recommended:
 Optional:
 
 - `GOOGLE_CIVIC_API_KEY`
-- `PROPUBLICA_API_KEY`
 - `MEETUP_API_KEY`
 - `APP_URL`
 

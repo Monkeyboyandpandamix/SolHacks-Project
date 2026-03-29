@@ -111,6 +111,8 @@ export interface Law {
 
 export interface Representative {
   id: string;
+  /** Library of Congress Bioguide ID when resolved via Congress.gov (enables richer voting/activity data). */
+  bioguideId?: string;
   name: string;
   role?: string;
   office?: string;
@@ -148,6 +150,8 @@ export interface UserSettings {
   location: {
     state: string;
     city: string;
+    /** U.S. ZIP (5 or ZIP+4) — used for House district / representatives lookup */
+    zipCode?: string;
   };
   interests: string[];
 }
