@@ -3,6 +3,52 @@ import { Bookmark, Share2, ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, C
 import { motion, AnimatePresence } from 'motion/react';
 import { Law, Comment } from '../types';
 import { generateAdvocacyLetter } from '../services/geminiService';
+import confetti from 'canvas-confetti';
+
+const JARGON_DICT: Record<string, string> = {
+  "ordinance": "A local law or regulation made by a city or town.",
+  "equity": "Fairness or justice in the way people are treated.",
+  "mandate": "An official order or requirement to do something.",
+  "statute": "A written law passed by a legislative body.",
+  "amendment": "A change or addition designed to improve a law or piece of legislation.",
+  "injunction": "A court order requiring a person to do or stop doing a specific action.",
+  "subpoena": "A formal document ordering someone to attend court.",
+  "litigation": "The process of taking legal action in court.",
+  "veto": "A constitutional right to reject a proposal from a law-making body.",
+  "zoning": "Local laws that dictate how real property can be used in certain areas.",
+  "jurisdiction": "The official power to make legal decisions and judgments.",
+  "precinct": "A district of a city or town as defined for police purposes or voting."
+};
+
+const HighlightedSummary = ({ text }: { text: string }) => {
+  const sortedTerms = Object.keys(JARGON_DICT).sort((a, b) => b.length - a.length);
+  const regex = new RegExp(`\\b(${sortedTerms.join('|')})\\b`, 'gi');
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    const term = match[1];
+    const definition = JARGON_DICT[term.toLowerCase()];
+    parts.push(
+      <span key={match.index} className="group relative inline-block border-b border-dashed border-indigo-400 text-indigo-700 cursor-help transition-colors hover:bg-indigo-50 hover:text-indigo-900 leading-tight">
+        {term}
+        <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-56 -translate-x-1/2 translate-y-1 rounded-xl bg-slate-900 p-3 text-xs font-bold text-white opacity-0 shadow-xl transition-all group-hover:-translate-y-1 group-hover:opacity-100 hidden sm:block">
+          <span className="block text-[10px] text-indigo-300 uppercase tracking-widest mb-1">{term}</span>
+          {definition}
+          <span className="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+        </span>
+      </span>
+    );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  return <>{parts.length > 0 ? parts : text}</>;
+};
 
 interface LawCardProps {
   law: Law;
@@ -55,8 +101,23 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
     setTimeout(() => setShareCopied(false), 2000);
   };
 
-  const handleDoubleClick = () => {
+  const triggerPulse = (type: 'support' | 'oppose' | 'save', event: React.MouseEvent) => {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const x = (rect.left + rect.width / 2) / window.innerWidth;
+    const y = (rect.top + rect.height / 2) / window.innerHeight;
+    
+    if (type === 'support') {
+      confetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#10b981', '#34d399', '#ffffff'], disableForReducedMotion: true });
+    } else if (type === 'oppose') {
+      confetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#f43f5e', '#fb7185', '#ffffff'], disableForReducedMotion: true });
+    } else if (type === 'save') {
+      confetti({ particleCount: 20, spread: 40, origin: { x, y }, colors: ['#4f46e5', '#818cf8', '#ffffff'], ticks: 100, disableForReducedMotion: true });
+    }
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
     if (law.userVote !== 'support') {
+      triggerPulse('support', e);
       onVote(law.id, 'support');
     }
     setShowHeart(true);
@@ -232,7 +293,9 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               </button>
             </div>
           </div>
-          <p className="text-xl font-bold leading-relaxed text-slate-700">{law.simplifiedSummary}</p>
+          <p className="text-xl font-bold leading-relaxed text-slate-700">
+            <HighlightedSummary text={law.simplifiedSummary} />
+          </p>
         </div>
 
         {/* Public Feedback System (Polls) */}
@@ -272,14 +335,14 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
         <div className="flex flex-wrap items-center justify-between gap-6 border-t border-slate-100 pt-8">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => onVote(law.id, 'support')}
+              onClick={(e) => { triggerPulse('support', e); onVote(law.id, 'support'); }}
               className={`flex items-center gap-3 rounded-2xl px-5 py-3 text-xs font-black transition-all ${law.userVote === 'support' ? 'bg-emerald-100 text-emerald-700 shadow-lg shadow-emerald-100' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}
             >
               <ThumbsUp size={20} />
               {law.votes?.support || 0}
             </button>
             <button 
-              onClick={() => onVote(law.id, 'oppose')}
+              onClick={(e) => { triggerPulse('oppose', e); onVote(law.id, 'oppose'); }}
               className={`flex items-center gap-3 rounded-2xl px-5 py-3 text-xs font-black transition-all ${law.userVote === 'oppose' ? 'bg-rose-100 text-rose-700 shadow-lg shadow-rose-100' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}
             >
               <ThumbsDown size={20} />
@@ -323,7 +386,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               </a>
             )}
             <button 
-              onClick={() => onSave(law.id)}
+              onClick={(e) => { if (!law.saved) triggerPulse('save', e); onSave(law.id); }}
               className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 transition-all ${law.saved ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100' : 'border-slate-100 text-slate-400 hover:border-indigo-600 hover:text-indigo-600'}`}
               title={law.saved ? "Unsave" : "Save"}
             >
@@ -573,7 +636,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                       The Gist
                     </h3>
                     <p className="text-2xl font-bold leading-relaxed text-indigo-950 md:text-3xl md:leading-relaxed">
-                      {law.simplifiedSummary}
+                      <HighlightedSummary text={law.simplifiedSummary} />
                     </p>
                   </section>
                   <div className="h-px w-32 bg-slate-200 mx-auto" />

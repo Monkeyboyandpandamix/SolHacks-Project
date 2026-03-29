@@ -12,8 +12,10 @@ export const STATE_FLAGS: Record<string, string> = {
   "Oklahoma": "us-ok", "Oregon": "us-or", "Pennsylvania": "us-pa", "Rhode Island": "us-ri", "South Carolina": "us-sc",
   "South Dakota": "us-sd", "Tennessee": "us-tn", "Texas": "us-tx", "Utah": "us-ut",
   "Vermont": "us-vt", "Virginia": "us-va", "Washington": "us-wa", "West Virginia": "us-wv",
-  "Wisconsin": "us-wi", "Wyoming": "us-wy", "Puerto Rico": "pr", "Washington D.C.": "us-dc"
+  "Wisconsin": "us-wi", "Wyoming": "us-wy", "Puerto Rico": "pr", "Washington D.C.": "us"
 };
+
+export const getFlagUrl = (code: string, size: 20 | 40 = 20) => code.startsWith('http') ? code : `https://flagcdn.com/w${size}/${code}.png`;
 
 export const STATE_ABBR: Record<string, string> = {
   "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
@@ -171,7 +173,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
             >
               <div className="flex items-center gap-2">
                 {STATE_FLAGS[state] && (
-                  <img src={`https://flagcdn.com/w20/${STATE_FLAGS[state]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[state]}.png 2x`} width="20" alt={`${state} flag`} className="rounded-sm shadow-sm" />
+                  <img src={getFlagUrl(STATE_FLAGS[state], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[state], 40)} 2x`} width="20" alt={`${state} flag`} className="rounded-sm shadow-sm" />
                 )}
                 <span>{state} ({STATE_ABBR[state]})</span>
               </div>
@@ -192,7 +194,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
                       className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
                     >
                       {STATE_FLAGS[s] ? (
-                        <img src={`https://flagcdn.com/w20/${STATE_FLAGS[s]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[s]}.png 2x`} width="20" alt={`${s} flag`} className="rounded-sm shadow-sm" />
+                        <img src={getFlagUrl(STATE_FLAGS[s], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[s], 40)} 2x`} width="20" alt={`${s} flag`} className="rounded-sm shadow-sm" />
                       ) : (
                         <div className="w-[20px]" />
                       )}
