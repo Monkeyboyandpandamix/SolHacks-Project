@@ -15,6 +15,8 @@ const stateLegislationCache = new Map<string, { data: any; timestamp: number }>(
 const stateLegislationBackoff = new Map<string, number>();
 const STATE_CACHE_TTL = 6 * 60 * 60 * 1000;
 const STATE_RESULT_LIMIT = 40;
+const ELEVENLABS_DEFAULT_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
+const ELEVENLABS_DEFAULT_MODEL_ID = "eleven_multilingual_v2";
 
 const CITY_DIRECTORY: Record<string, string[]> = {
   California: ["San Francisco", "San Diego", "San Jose", "Sacramento", "Oakland", "Los Angeles"],
@@ -1116,6 +1118,86 @@ async function startServer() {
     } catch (error: any) {
       console.error("Google Civic API Error:", error.message);
       res.json({ representatives: [] });
+    }
+  });
+
+  app.get("/api/census/state-populations", async (_req, res) => {
+    refreshRuntimeEnv();
+    const censusKey = process.env.CENSUS_API_KEY;
+    if (!censusKey) {
+      return res.json({ populations: {} });
+    }
+
+    try {
+      const response = await axios.get("https://api.census.gov/data/2023/acs/acs5", {
+        params: {
+          get: "NAME,B01003_001E",
+          "for": "state:*",
+          key: censusKey,
+        },
+        timeout: 10000,
+      });
+
+      const rows = Array.isArray(response.data) ? response.data : [];
+      const [, ...dataRows] = rows;
+      const populations = dataRows.reduce((acc: Record<string, number>, row: string[]) => {
+        const stateName = row?.[0];
+        const population = Number(row?.[1]);
+        if (stateName && Number.isFinite(population)) {
+          acc[stateName] = population;
+        }
+        return acc;
+      }, {});
+
+      res.json({ populations });
+    } catch (error: any) {
+      console.error("Census API Error:", error.message);
+      res.json({ populations: {} });
+    }
+  });
+
+  app.post("/api/voice/readaloud", async (req, res) => {
+    refreshRuntimeEnv();
+    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const text = String(req.body?.text || "").trim();
+    const language = String(req.body?.language || "English");
+
+    if (!text) {
+      return res.status(400).json({ error: "Text is required" });
+    }
+
+    if (!apiKey) {
+      return res.status(503).json({ error: "ELEVENLABS_API_KEY is not configured" });
+    }
+
+    try {
+      const response = await axios.post(
+        `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_DEFAULT_VOICE_ID}`,
+        {
+          text,
+          model_id: ELEVENLABS_DEFAULT_MODEL_ID,
+          voice_settings: {
+            stability: 0.45,
+            similarity_boost: 0.8,
+          },
+          language_code: normalizeLanguageCode(language),
+        },
+        {
+          headers: {
+            "xi-api-key": apiKey,
+            "Content-Type": "application/json",
+            Accept: "audio/mpeg",
+          },
+          responseType: "arraybuffer",
+          timeout: 20000,
+        },
+      );
+
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.send(Buffer.from(response.data));
+    } catch (error: any) {
+      console.error("ElevenLabs readaloud error:", error.response?.data || error.message);
+      res.status(503).json({ error: "Failed to generate ElevenLabs audio" });
     }
   });
 

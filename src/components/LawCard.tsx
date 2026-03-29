@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bookmark, Share2, ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, CheckCircle, Clock, AlertTriangle, XCircle, Globe, Map, Building2, Landmark, MessageSquare, Send, BarChart3, Sparkles, BookOpen, Mail, Copy, Check, Volume2, VolumeX, Maximize, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import axios from 'axios';
 import { Law, Comment } from '../types';
 import { generateAdvocacyLetter } from '../services/geminiService';
 import { fireConfetti } from '../utils/confetti';
@@ -74,6 +75,17 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
   const [showHeart, setShowHeart] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [typedImpact, setTypedImpact] = useState('');
+  const elevenLabsAudioRef = React.useRef<HTMLAudioElement | null>(null);
+
+  const stopSpeech = React.useCallback(() => {
+    window.speechSynthesis.cancel();
+    if (elevenLabsAudioRef.current) {
+      elevenLabsAudioRef.current.pause();
+      elevenLabsAudioRef.current.src = '';
+      elevenLabsAudioRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
 
   React.useEffect(() => {
     if (isExpanded && (law.personalImpact || law.impact)) {
@@ -95,18 +107,52 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
   const isTrending = totalEngagements >= 10;
 
   React.useEffect(() => {
-    return () => window.speechSynthesis.cancel();
-  }, []);
+    return () => stopSpeech();
+  }, [stopSpeech]);
 
-  const toggleSpeech = () => {
+  const speakWithBrowserFallback = React.useCallback(() => {
+    const utterance = new SpeechSynthesisUtterance(law.simplifiedSummary);
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+    window.speechSynthesis.speak(utterance);
+    setIsPlaying(true);
+  }, [law.simplifiedSummary]);
+
+  const toggleSpeech = async () => {
     if (isPlaying) {
-      window.speechSynthesis.cancel();
-      setIsPlaying(false);
-    } else {
-      const utterance = new SpeechSynthesisUtterance(law.simplifiedSummary);
-      utterance.onend = () => setIsPlaying(false);
-      window.speechSynthesis.speak(utterance);
+      stopSpeech();
+      return;
+    }
+
+    try {
+      const response = await axios.post('/api/voice/readaloud', {
+        text: law.simplifiedSummary,
+        language: 'English',
+      }, {
+        responseType: 'blob',
+      });
+
+      const audioUrl = URL.createObjectURL(response.data);
+      const audio = new Audio(audioUrl);
+      elevenLabsAudioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (elevenLabsAudioRef.current === audio) {
+          elevenLabsAudioRef.current = null;
+        }
+        setIsPlaying(false);
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (elevenLabsAudioRef.current === audio) {
+          elevenLabsAudioRef.current = null;
+        }
+        speakWithBrowserFallback();
+      };
       setIsPlaying(true);
+      await audio.play();
+    } catch {
+      speakWithBrowserFallback();
     }
   };
 
