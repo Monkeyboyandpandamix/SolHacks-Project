@@ -73,6 +73,21 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
   const [shareCopied, setShareCopied] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [typedImpact, setTypedImpact] = useState('');
+
+  React.useEffect(() => {
+    if (isExpanded && (law.personalImpact || law.impact)) {
+      const text = law.personalImpact || law.impact || '';
+      let i = 0;
+      setTypedImpact('');
+      const interval = setInterval(() => {
+        setTypedImpact(text.slice(0, i));
+        i++;
+        if (i > text.length + 1) clearInterval(interval);
+      }, 10);
+      return () => clearInterval(interval);
+    }
+  }, [isExpanded, law.personalImpact, law.impact]);
 
   const totalChars = (law.originalText?.length || 0) + (law.simplifiedSummary?.length || 0);
   const readingTime = Math.max(1, Math.ceil(totalChars / 1000));
@@ -105,7 +120,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const x = (rect.left + rect.width / 2) / window.innerWidth;
     const y = (rect.top + rect.height / 2) / window.innerHeight;
-    
+
     if (type === 'support') {
       fireConfetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#10b981', '#34d399', '#ffffff'], disableForReducedMotion: true });
     } else if (type === 'oppose') {
@@ -113,6 +128,15 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
     } else if (type === 'save') {
       fireConfetti({ particleCount: 20, spread: 40, origin: { x, y }, colors: ['#4f46e5', '#818cf8', '#ffffff'], ticks: 100, disableForReducedMotion: true });
     }
+  };
+
+  const handleSmartCopy = (e: React.ClipboardEvent) => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+    const text = selection.toString();
+    const citation = `\n\n— Sourced from CulturAct: ${law.title} (${law.level.toUpperCase()} Level)\nMore context: ${law.sourceUrl || "app.culturact.org"}`;
+    e.clipboardData.setData('text/plain', text + citation);
+    e.preventDefault();
   };
 
   const handleDoubleClick = (e: React.MouseEvent) => {
@@ -191,7 +215,8 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
   return (
     <motion.div 
       layout
-      className={`group relative mb-8 overflow-hidden rounded-[40px] bg-white p-2 border-[3px] border-slate-200 shadow-xl shadow-slate-200/50 transition-all hover:border-indigo-200 hover:shadow-2xl hover:shadow-indigo-100 ${isComparing ? 'ring-4 ring-amber-500 ring-offset-4' : ''}`}
+      onCopy={handleSmartCopy}
+      className={`group relative mb-8 overflow-hidden rounded-[40px] bg-white p-2 border-[3px] border-slate-200 shadow-xl shadow-slate-200/50 transition-all duration-300 group-hover/feed:opacity-40 hover:!opacity-100 hover:scale-[1.01] hover:border-indigo-200 hover:shadow-2xl hover:shadow-indigo-100 ${isComparing ? 'ring-4 ring-amber-500 ring-offset-4' : ''}`}
     >
       <div className="p-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -239,7 +264,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               </div>
             </div>
             {onToggleFollowTopic && (
-              <button 
+              <button
                 onClick={() => onToggleFollowTopic(law.category)}
                 className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${isFollowingTopic ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-50 text-slate-400 hover:bg-indigo-600 hover:text-white'}`}
               >
@@ -250,13 +275,13 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
           <h3 className="text-3xl font-black leading-tight tracking-tighter text-indigo-950">{law.title}</h3>
         </div>
 
-        <div 
+        <div
           onDoubleClick={handleDoubleClick}
           className="mb-8 rounded-[32px] bg-slate-50 p-8 border-2 border-slate-100 relative cursor-pointer select-none group"
         >
           <AnimatePresence>
             {showHeart && (
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.5, opacity: 0, x: '-50%', y: '-50%' }}
                 animate={{ scale: [1.2, 1], opacity: 1 }}
                 exit={{ scale: 1.5, opacity: 0 }}
@@ -275,7 +300,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               </span>
             </h4>
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => setIsFocusMode(true)}
                 className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
                 title="Zen Focus Mode"
@@ -283,7 +308,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                 <Maximize size={16} />
                 FOCUS
               </button>
-              <button 
+              <button
                 onClick={toggleSpeech}
                 className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 shadow-sm transition-all hover:bg-indigo-600 hover:text-white"
                 title={isPlaying ? "Stop listening" : "Listen to summary"}
@@ -310,15 +335,15 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               {law.poll.options.map((option) => {
                 const percentage = totalPollVotes > 0 ? Math.round((option.count / totalPollVotes) * 100) : 0;
                 const isSelected = law.poll?.userChoice === option.label;
-                
+
                 return (
                   <button
                     key={option.label}
                     onClick={() => onPollVote(law.id, option.label)}
                     className={`relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 shadow-lg shadow-indigo-100' : 'border-slate-100 bg-white hover:border-indigo-600/50'}`}
                   >
-                    <div 
-                      className="absolute left-0 top-0 h-full bg-indigo-600/10 transition-all duration-1000 ease-out" 
+                    <div
+                      className="absolute left-0 top-0 h-full bg-indigo-600/10 transition-all duration-1000 ease-out"
                       style={{ width: `${percentage}%` }}
                     />
                     <div className="relative flex items-center justify-between">
@@ -334,21 +359,21 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
 
         <div className="flex flex-wrap items-center justify-between gap-6 border-t border-slate-100 pt-8">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={(e) => { triggerPulse('support', e); onVote(law.id, 'support'); }}
               className={`flex items-center gap-3 rounded-2xl px-5 py-3 text-xs font-black transition-all ${law.userVote === 'support' ? 'bg-emerald-100 text-emerald-700 shadow-lg shadow-emerald-100' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}
             >
               <ThumbsUp size={20} />
               {law.votes?.support || 0}
             </button>
-            <button 
+            <button
               onClick={(e) => { triggerPulse('oppose', e); onVote(law.id, 'oppose'); }}
               className={`flex items-center gap-3 rounded-2xl px-5 py-3 text-xs font-black transition-all ${law.userVote === 'oppose' ? 'bg-rose-100 text-rose-700 shadow-lg shadow-rose-100' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}
             >
               <ThumbsDown size={20} />
               {law.votes?.oppose || 0}
             </button>
-            <button 
+            <button
               onClick={() => setShowComments(!showComments)}
               className={`flex items-center gap-3 rounded-2xl px-5 py-3 text-xs font-black transition-all ${showComments ? 'bg-indigo-100 text-indigo-700 shadow-lg shadow-indigo-100' : 'text-slate-400 hover:bg-slate-50 hover:text-indigo-600'}`}
             >
@@ -358,7 +383,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
           </div>
 
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={handleShare}
               className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 transition-all ${shareCopied ? 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-xl shadow-emerald-100' : 'border-slate-100 text-slate-400 hover:border-indigo-600 hover:text-indigo-600'}`}
               title="Share"
@@ -366,7 +391,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               {shareCopied ? <Check size={22} /> : <Share2 size={22} />}
             </button>
             {onCompare && (
-              <button 
+              <button
                 onClick={() => onCompare(law)}
                 className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 transition-all ${isComparing ? 'bg-amber-500 text-white border-amber-500 shadow-xl shadow-amber-100' : 'border-slate-100 text-slate-400 hover:border-amber-500 hover:text-amber-500'}`}
                 title="Compare"
@@ -375,9 +400,9 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
               </button>
             )}
             {law.sourceUrl && (
-              <a 
-                href={law.sourceUrl} 
-                target="_blank" 
+              <a
+                href={law.sourceUrl}
+                target="_blank"
                 rel="noopener noreferrer"
                 className="flex h-12 items-center gap-3 rounded-2xl border-2 border-slate-100 px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest transition-all hover:border-indigo-600 hover:text-indigo-600"
               >
@@ -385,14 +410,14 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                 SOURCE
               </a>
             )}
-            <button 
+            <button
               onClick={(e) => { if (!law.saved) triggerPulse('save', e); onSave(law.id); }}
               className={`flex h-12 w-12 items-center justify-center rounded-2xl border-2 transition-all ${law.saved ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100' : 'border-slate-100 text-slate-400 hover:border-indigo-600 hover:text-indigo-600'}`}
               title={law.saved ? "Unsave" : "Save"}
             >
               <Bookmark size={22} fill={law.saved ? "currentColor" : "none"} />
             </button>
-            <button 
+            <button
               onClick={() => setIsExpanded(!isExpanded)}
               className={`flex items-center gap-3 rounded-2xl px-6 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${isExpanded ? 'bg-indigo-950 text-white shadow-xl' : 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 hover:scale-105'}`}
             >
@@ -405,7 +430,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
         {/* Expanded Details Section */}
         <AnimatePresence>
           {isExpanded && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -423,8 +448,11 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                       <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Tailored to your situation</p>
                     </div>
                   </div>
-                  <p className="text-lg font-bold text-indigo-950 leading-relaxed">
-                    {law.personalImpact || law.impact}
+                  <p className="text-lg font-bold text-indigo-950 leading-relaxed min-h-[4rem]">
+                    {typedImpact}
+                    {typedImpact.length < (law.personalImpact || law.impact || '').length && (
+                      <span className="inline-block w-2 h-5 bg-indigo-600 ml-1 animate-pulse align-middle" />
+                    )}
                   </p>
                 </div>
 
@@ -486,14 +514,14 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                       </div>
                     </div>
                     <div className="flex gap-3">
-                      <button 
+                      <button
                         onClick={() => handleGenerateLetter('support')}
                         disabled={isGeneratingLetter}
                         className="rounded-2xl bg-emerald-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-100 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
                       >
                         {isGeneratingLetter ? "DRAFTING..." : "DRAFT SUPPORT LETTER"}
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleGenerateLetter('oppose')}
                         disabled={isGeneratingLetter}
                         className="rounded-2xl bg-rose-600 px-6 py-3 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-rose-100 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
@@ -504,12 +532,12 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
                   </div>
 
                   {generatedLetter && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="relative rounded-2xl bg-white p-8 shadow-inner border border-rose-100"
                     >
-                      <button 
+                      <button
                         onClick={copyToClipboard}
                         className="absolute right-6 top-6 flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-indigo-600 hover:text-white transition-all"
                       >
@@ -546,23 +574,23 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
         {/* Comments Section */}
         <AnimatePresence>
           {showComments && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               className="mt-8 overflow-hidden border-t border-slate-100 pt-8"
             >
               <h4 className="mb-6 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Community Dialogue</h4>
-              
+
               <form onSubmit={handleCommentSubmit} className="mb-8 flex gap-4">
-                <input 
+                <input
                   type="text"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                   placeholder="Share your perspective..."
                   className="flex-1 rounded-2xl border-2 border-slate-100 bg-slate-50 px-6 py-4 text-sm font-bold text-slate-900 outline-none ring-indigo-600 transition-all focus:ring-2"
                 />
-                <button 
+                <button
                   type="submit"
                   disabled={!commentText.trim()}
                   className="rounded-2xl bg-indigo-600 px-8 py-4 text-white font-black shadow-xl shadow-indigo-100 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:scale-100"
