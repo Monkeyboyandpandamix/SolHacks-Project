@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Sun, Moon, Type, Globe, Bell, Check, Trash2 } from 'lucide-react';
 import { UserSettings, Notification } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { SUPPORTED_LANGUAGES } from '../constants/languages';
 
 interface HeaderProps {
   settings: UserSettings;
@@ -13,15 +14,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notifications, onMarkRead, onClearAll }) => {
   const [showNotifications, setShowNotifications] = useState(false);
-  const languages = [
-    { id: 'en', label: 'English' },
-    { id: 'es', label: 'Español' },
-    { id: 'zh-CN', label: '中文' },
-    { id: 'tl', label: 'Tagalog' },
-    { id: 'vi', label: 'Tiếng Việt' },
-    { id: 'ar', label: 'العربية' },
-    { id: 'fr', label: 'Français' }
-  ];
+  const languages = SUPPORTED_LANGUAGES;
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (

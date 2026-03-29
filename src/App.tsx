@@ -47,6 +47,7 @@ import AILawyer from './components/AILawyer';
 import AskAIFloatingButton from './components/AskAIFloatingButton';
 import CommunityView from './components/CommunityView';
 import ProtestGuide from './components/ProtestGuide';
+import { normalizeLanguageCode } from './constants/languages';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
 import { fetchLaws, mergeCanonicalLaws } from './services/geminiService';
 
@@ -136,17 +137,7 @@ export default function App() {
   const [settings, setSettings] = useState<UserSettings>(() => {
     const saved = localStorage.getItem(SETTINGS_STORAGE_KEY) || localStorage.getItem(LEGACY_SETTINGS_STORAGE_KEY);
     const parsed = saved ? JSON.parse(saved) : null;
-    
-    const langMap: Record<string, string> = {
-      "English": "en", "Spanish": "es", "Chinese": "zh-CN", "Myanmar": "my",
-      "Tagalog": "tl", "Vietnamese": "vi", "Arabic": "ar", "French": "fr",
-      "Korean": "ko", "Russian": "ru"
-    };
-
-    let defaultLang = "en";
-    if (parsed && parsed.language) {
-      defaultLang = langMap[parsed.language] || parsed.language;
-    }
+    const defaultLang = normalizeLanguageCode(parsed?.language);
 
     return parsed ? { ...parsed, language: defaultLang } : {
       highContrast: false,

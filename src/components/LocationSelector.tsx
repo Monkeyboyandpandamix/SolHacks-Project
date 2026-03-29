@@ -32,6 +32,7 @@ export const STATE_ABBR: Record<string, string> = {
 };
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
+import { SUPPORTED_LANGUAGES, normalizeLanguageCode } from '../constants/languages';
 
 interface LocationSelectorProps {
   onLocationChange: (state: string, city: string, language: string) => void;
@@ -45,7 +46,7 @@ interface LocationSelectorProps {
 const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, onInterestChange, initialState, initialCity, initialLanguage, initialInterest = 'all' }) => {
   const [state, setState] = useState(initialState);
   const [city, setCity] = useState(initialCity);
-  const [language, setLanguage] = useState(initialLanguage);
+  const [language, setLanguage] = useState(normalizeLanguageCode(initialLanguage));
   const [interest, setInterest] = useState(initialInterest);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -137,18 +138,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
     "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "Washington D.C.", "West Virginia", "Wisconsin", "Wyoming"
   ];
 
-  const languages = [
-    { id: 'en', label: 'English' },
-    { id: 'es', label: 'Español' },
-    { id: 'zh-CN', label: '中文' },
-    { id: 'my', label: 'မြန်မာ' },
-    { id: 'tl', label: 'Tagalog' },
-    { id: 'vi', label: 'Tiếng Việt' },
-    { id: 'ar', label: 'العربية' },
-    { id: 'fr', label: 'Français' },
-    { id: 'ko', label: '한국어' },
-    { id: 'ru', label: 'Русский' },
-  ];
+  const languages = SUPPORTED_LANGUAGES;
 
   return (
     <div className="card mb-6 p-4">

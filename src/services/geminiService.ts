@@ -7,6 +7,7 @@ import {
   Representative,
   RepresentativeVoteRecord,
 } from "../types";
+import { getLanguageLabel, normalizeLanguageCode } from "../constants/languages";
 
 const stateCodes: Record<string, string> = {
   Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA", Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA",
@@ -519,9 +520,13 @@ function enrichLaws(laws: Law[], state: string, city: string): Law[] {
 }
 
 async function translateBatch(texts: string[], targetLanguage: string) {
-  if (targetLanguage === "English" || texts.length === 0) return texts;
+  const languageCode = normalizeLanguageCode(targetLanguage);
+  if (languageCode === "en" || texts.length === 0) return texts;
   try {
-    const response = await axios.post("/api/ai/translate-batch", { texts, targetLanguage });
+    const response = await axios.post("/api/ai/translate-batch", {
+      texts,
+      targetLanguage: getLanguageLabel(languageCode),
+    });
     return Array.isArray(response.data?.translations) ? response.data.translations : texts;
   } catch {
     return texts;
@@ -529,7 +534,7 @@ async function translateBatch(texts: string[], targetLanguage: string) {
 }
 
 async function applyTranslationToLaws(laws: Law[], targetLanguage: string): Promise<Law[]> {
-  if (targetLanguage === "English" || laws.length === 0) return laws;
+  if (normalizeLanguageCode(targetLanguage) === "en" || laws.length === 0) return laws;
   const translated = await Promise.all(laws.map(async (law) => {
     const glossaryDefinitions = (law.glossary || []).map(item => item.definition);
     const fields = [
@@ -566,7 +571,7 @@ async function postAi<T>(url: string, payload: unknown): Promise<T | null> {
 export async function fetchLaws(
   state: string,
   city: string,
-  language: string = "English",
+  language: string = "en",
   userSituation?: string,
   primaryInterest: string = "all",
 ): Promise<{ laws: Law[]; warnings: string[] }> {
@@ -632,9 +637,13 @@ export async function chatWithLawyer(history: ChatMessage[], message: string, co
 }
 
 export async function translateContent(text: string, targetLanguage: string): Promise<string> {
-  if (targetLanguage === "English") return text;
+  const languageCode = normalizeLanguageCode(targetLanguage);
+  if (languageCode === "en") return text;
   try {
-    const response = await axios.post("/api/ai/translate", { text, targetLanguage });
+    const response = await axios.post("/api/ai/translate", {
+      text,
+      targetLanguage: getLanguageLabel(languageCode),
+    });
     return response.data?.translation || text;
   } catch {
     return text;
