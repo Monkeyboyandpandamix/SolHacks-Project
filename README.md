@@ -1,23 +1,117 @@
 # CulturAct
 
-CulturAct is a location-aware legislative discovery app that combines live government data, Firebase-backed persistence, and Gemini-powered summarization. It helps users browse federal, state, county, and city legislation, understand what it means in plain language, compare laws, and use community features tied to their location.
+**Elevator pitch**
 
-It is designed for both:
+An AI-powered civic platform that helps communities understand how laws affect language, identity, heritage, belonging, and everyday life before those impacts are felt too late.
 
-- general civic users tracking everyday policy
-- communities affected by culture, identity, language, immigration, equity, and heritage legislation
+CulturAct is the project name.
 
-This project fits the Culture track because it focuses on how laws shape language, heritage, identity, belonging, and the day-to-day life of diverse communities, then gives those communities tools to understand and respond.
+## Inspiration
 
-## Elevator Pitch
+We were inspired by how often culture is affected by law long before people realize it. Policies around immigration, language access, education, religious freedom, housing, public funding, and community rights shape whether people feel seen, safe, and able to belong. Yet the people most affected by those decisions are often the least likely to receive that information in plain language or in a form that feels relevant to their lives. We wanted to build something that treats legislation not just as politics, but as something that shapes culture, identity, memory, and community survival.
 
-> Every year, bills are introduced that affect housing, education, work, immigration, language access, cultural funding, and community rights, but most people never hear about them until the impact is already real.
->
-> CulturAct is an AI-powered civic platform where you choose who you are, where you live, and what issues matter to you, and it shows you the laws shaping your daily life and your community. Each law is pulled from real public sources, summarized in plain language, labeled by jurisdiction and impact, and explained in a way that connects policy to lived experience.
->
-> Users can ask questions in natural language, compare laws, save what matters, explore legislation on a map, join neighborhood discussion, and take action through advocacy letters and representative contact tools.
->
-> CulturAct helps people move from confusion to clarity, and from awareness to action.
+## What it does
+
+CulturAct is a location-aware legislative discovery app focused on helping people understand how policy affects culture and community. It pulls federal, state, and local policy data, summarizes it in plain language, translates it into supported languages including Farsi, and gives users tools to explore laws by geography, compare bills, follow issues, generate advocacy letters, and discover local community resources.
+
+It also includes:
+
+- a Census-backed U.S. heat map that helps users see where policy activity is concentrated
+- representative lookup with contact information and recent official voting history
+- support for culturally important issue areas such as immigration, language access, indigenous rights, arts and culture funding, racial equity, and religious freedom
+- community resources and events that connect legislation to real local support systems
+- interactive civic education features such as the Safety Guide, Law Workflow, Court Simulator, and Bill Simulator
+
+## How we built it
+
+We built CulturAct as a React + TypeScript application with a Node/Vite server. The frontend uses `react-leaflet` for the map experience and Firebase for auth and Firestore-backed persistence. The backend aggregates legislation from Congress.gov, Federal Register, GovInfo, OpenStates, local public sources, Google Civic, official House/Senate vote sources, and the U.S. Census ACS API.
+
+Gemini powers the app's plain-language summaries, comparisons, advocacy-letter generation, translation pipeline, and assistant experiences. That mattered especially for turning dense policy language into something that people from different linguistic and cultural backgrounds could actually use. We also deployed the app on Vultr using Ubuntu, PM2, and Nginx.
+
+## Challenges we ran into
+
+- Legislative data quality varies a lot across federal, state, and local sources.
+- Representative lookup for the U.S. House is much harder without ZIP code or exact address data.
+- Vote-history data is not packaged cleanly in one source, so we had to work with official House and Senate sources.
+- Map visualization needed to move beyond simple bubbles into a clearer heat-map style experience.
+- Keeping the feed source-backed and deduplicated required careful normalization and caching logic.
+- Designing for cultural relevance was also a challenge: it was not enough to show “what a bill is,” we had to think about how to show who it affects, why it matters, and how it touches community identity and access.
+
+## Accomplishments that we're proud of
+
+- Built a real source-backed civic legislation feed instead of a static demo dataset.
+- Added multilingual support including Farsi.
+- Added Census-backed demographic context to the map.
+- Added live representative lookup and official recent voting history.
+- Deployed the project to Vultr and got the full stack running behind Nginx with PM2.
+- Built interactive civic learning modules, not just a feed reader.
+- Framed legislation through culture-centered issue areas so the product speaks to identity, language, heritage, and belonging instead of treating policy as abstract bureaucracy.
+
+## What we learned
+
+- Civic-tech products need strong normalization and fallback logic because public data is messy.
+- UX matters as much as data: laws need to be explained in plain language, not just displayed.
+- Geographic context, translation, and representative access all make legislation feel more actionable.
+- Culture-centered product design changes what “useful” means. People connect more when policy is explained through community impacts like language access, immigration risk, arts funding, education equity, and identity-based belonging.
+- Deployment and operations matter early when a project depends on many outside APIs and scrapers.
+
+## What's next for Untitled
+
+Next for CulturAct:
+
+- improve U.S. House representative resolution with fuller address handling
+- strengthen official vote parsing and caching
+- add richer demographic overlays from Census data
+- integrate higher-quality voice features and multilingual civic storytelling
+- deepen the culture-focused experience with stronger community narratives, localized impact analysis, and richer language-access workflows
+- move from prototype deployment toward a stricter production runtime
+
+## Built with
+
+- TypeScript
+- React
+- Vite
+- Node.js
+- Express-style server routing in `server.ts`
+- Firebase Auth
+- Firestore
+- Tailwind-style utility classes
+- React Leaflet / OpenStreetMap
+- PM2
+- Nginx
+- Vultr
+- Gemini API
+- Congress.gov API
+- Federal Register API
+- GovInfo API
+- OpenStates API
+- Google Civic API
+- U.S. Census ACS API
+- Official House Clerk vote sources
+- Official U.S. Senate vote sources
+
+## Which of the following AI tools did you use this weekend?
+
+- Gemini API
+- Generative AI-assisted code iteration and debugging workflows
+
+## Did you implement a generative AI model or API in your hack this weekend?
+
+Yes. We implemented Gemini-powered summarization, comparison, translation, assistant chat, and advocacy-letter generation directly in the app, especially to make culturally and linguistically complex legislation understandable to more people.
+
+## Technology feedback
+
+### Gemini
+
+Gemini was one of the most useful parts of the stack because it let us turn dense legislative language into plain-language explanations, translations, and advocacy drafts quickly. The biggest value came from making policy understandable across different cultural and linguistic contexts rather than just searchable.
+
+### Firebase
+
+Firebase worked well for quick authentication and persistent user/community data. It let us focus on community features, user context, and civic participation instead of spending our time building core infrastructure from scratch.
+
+### Vultr
+
+Vultr was straightforward for getting a full-stack deployment online quickly. Using Ubuntu, PM2, and Nginx gave us enough control for a hackathon deployment without a complicated platform setup.
 
 ## Current Scope
 
@@ -26,9 +120,10 @@ This project fits the Culture track because it focuses on how laws shape languag
 - State data from OpenStates
 - Local/county data from configured public source scrapers
 - Real OpenStreetMap-based map view for geographic exploration
+- U.S. Census ACS-backed state heat map intensity
 - Firebase Auth, Firestore caching, and community chat
 - Community tab with events, neighborhood chat, translators, shelters, legal help, and immigration resources
-- Analytics, map, saved laws, digest, and AI assistant views
+- Analytics, map, saved laws, digest, AI assistant, and Safety Guide views
 
 ## App Features
 
@@ -44,6 +139,7 @@ This project fits the Culture track because it focuses on how laws shape languag
 - Law Workflow
 - Court Simulator
 - Bill Simulator
+- Safety Guide
 
 ### Legislative Feed
 
@@ -81,10 +177,12 @@ This project fits the Culture track because it focuses on how laws shape languag
 
 - Sign in with Firebase Auth
 - Save a personal or community context statement
+- Save ZIP code for more accurate U.S. House representative lookup
 - Follow and unfollow standard civic topics and cultural impact tags
 - Store per-user profile data in Firestore
 - Representative cards with contact links
-- Live representative voting history using `GOOGLE_CIVIC_API_KEY` plus official House and Senate vote sources
+- Live federal representative lookup using Google Civic and Congress-aware fallback logic
+- Recent official voting history from House Clerk and U.S. Senate vote sources
 
 ### Community
 
@@ -99,11 +197,13 @@ This project fits the Culture track because it focuses on how laws shape languag
 
 - Analytics dashboard
 - Map-based exploration with OpenStreetMap
-- Clickable state and federal map markers that filter the current feed
+- State-level heat map using ACS population context from the U.S. Census API
+- Clickable state and federal map interactions that filter the current feed
 - Weekly Digest snapshot
 - Law workflow explainer
 - Courtroom simulator
 - Bill simulator
+- Safety Guide with rights, preparation, and interactive scenario flow
 - In-app notifications for feed and data warnings
 
 ## Key Behaviors
@@ -125,9 +225,18 @@ This project fits the Culture track because it focuses on how laws shape languag
 ### Map View
 
 - The map uses OpenStreetMap tiles through `react-leaflet`.
-- State bubbles scale with the number of laws currently loaded for that state.
+- The map includes a state-level choropleth/heat visualization.
+- Heat intensity is based on loaded laws per 100,000 residents using U.S. Census ACS population data.
+- State markers still provide quick popups and state selection anchors.
 - A dedicated federal marker filters federal laws.
 - Selecting the same marker again clears that map selection.
+
+### Representative Lookup
+
+- Google Civic API is used to resolve federal representatives from the selected location.
+- ZIP code can be saved in the user profile to improve U.S. House district resolution.
+- Official recent voting history is parsed from House Clerk and U.S. Senate vote sources.
+- If a live federal lookup is incomplete, the UI falls back to state-aware representative cards instead of showing nothing.
 
 ### Canonical Law Deduplication
 
@@ -226,10 +335,16 @@ Rules currently cover:
 - Congress.gov API
 - Federal Register API
 - GovInfo API
+- Official House Clerk vote pages
+- Official U.S. Senate roll call vote pages
 
 ### State
 
 - OpenStates API
+
+### Demographic / Population Context
+
+- U.S. Census ACS API for state population data used in the map heat layer
 
 ### Local / County
 
@@ -260,6 +375,7 @@ Required or strongly recommended:
 Optional:
 
 - `GOOGLE_CIVIC_API_KEY`
+- `CENSUS_API_KEY`
 - `MEETUP_API_KEY`
 - `APP_URL`
 
@@ -290,6 +406,86 @@ The app runs at:
 ```bash
 npm run build
 ```
+
+## Vultr Deployment
+
+The app was deployed to a Vultr Ubuntu server and run behind Nginx with PM2.
+
+### Server Setup
+
+- Provider: Vultr
+- Instance type: Cloud Compute
+- OS: Ubuntu 24.04 LTS
+- App process manager: PM2
+- Reverse proxy: Nginx
+
+### Server Provisioning Commands
+
+```bash
+apt update && apt upgrade -y
+apt install -y git curl nginx ufw
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+npm install -g pm2
+```
+
+### App Deployment Commands
+
+```bash
+cd /root
+git clone https://github.com/Monkeyboyandpandamix/SolHacks-Project.git
+cd SolHacks-Project
+npm install
+nano .env
+npm run build
+pm2 start "npm run dev" --name culturact
+pm2 save
+pm2 startup
+```
+
+### Firewall Commands
+
+```bash
+ufw allow OpenSSH
+ufw allow 'Nginx Full'
+ufw --force enable
+```
+
+### Runtime Verification Commands
+
+```bash
+pm2 status
+curl http://127.0.0.1:3000
+nginx -t
+systemctl restart nginx
+```
+
+### Example Nginx Reverse Proxy
+
+```nginx
+server {
+    listen 80;
+    server_name YOUR_DOMAIN_OR_SERVER_IP;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+### Deployment Notes
+
+- The current PM2 command uses `npm run dev`, which is acceptable for a prototype/demo deployment.
+- For a stricter production setup, a dedicated production server command is recommended.
+- The server should keep `.env` out of version control and store all API keys only on the deployed host.
 
 ## Deploy Firestore Rules
 
