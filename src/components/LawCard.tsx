@@ -191,7 +191,7 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
   return (
     <motion.div 
       layout
-      className={`group relative mb-8 overflow-hidden rounded-[40px] bg-white p-2 shadow-xl shadow-slate-200/50 transition-all hover:shadow-2xl hover:shadow-indigo-100 ${isComparing ? 'ring-4 ring-amber-500 ring-offset-4' : ''}`}
+      className={`group relative mb-8 overflow-hidden rounded-[40px] bg-white p-2 border-[3px] border-slate-200 shadow-xl shadow-slate-200/50 transition-all hover:border-indigo-200 hover:shadow-2xl hover:shadow-indigo-100 ${isComparing ? 'ring-4 ring-amber-500 ring-offset-4' : ''}`}
     >
       <div className="p-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
