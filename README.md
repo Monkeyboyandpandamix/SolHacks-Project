@@ -12,7 +12,7 @@ We were inspired by how often culture is affected by law long before people real
 
 ## What it does
 
-CulturAct is a location-aware legislative discovery app focused on helping people understand how policy affects culture and community. It pulls federal, state, and local policy data, summarizes it in plain language, translates it into supported languages including Farsi, and gives users tools to explore laws by geography, compare bills, follow issues, generate advocacy letters, and discover local community resources.
+CulturAct is a location-aware legislative discovery app focused on helping people understand how policy affects culture and community. It pulls federal, state, and local policy data, summarizes it in plain language, translates it into supported languages including Spanish, and gives users tools to explore laws by geography, compare bills, follow issues, generate advocacy letters, and discover local community resources.
 
 It also includes:
 
@@ -43,7 +43,7 @@ For accessibility and language support, we added ElevenLabs-based read-aloud so 
 ## Accomplishments that we're proud of
 
 - Built a real source-backed civic legislation feed instead of a static demo dataset.
-- Added multilingual support including Farsi.
+- Added multilingual support including Spanish, French, Chinese.
 - Added Census-backed demographic context to the map.
 - Added live representative lookup and official recent voting history.
 - Added ElevenLabs read-aloud with automatic browser fallback.
@@ -253,7 +253,7 @@ solana balance
 - Personalized context using the user’s saved situation
 - AI law comparison and conflict analysis
 - AI advocacy letter generation
-- Translation support in the feed pipeline, including Farsi (`فارسی`)
+- Translation support in the feed pipeline, including Farsi (`فارسی`), Spanish.
 
 ### User Profile
 
