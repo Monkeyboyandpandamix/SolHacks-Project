@@ -20,6 +20,7 @@ It also includes:
 - representative lookup with contact information and recent official voting history
 - support for culturally important issue areas such as immigration, language access, indigenous rights, arts and culture funding, racial equity, and religious freedom
 - community resources and events that connect legislation to real local support systems
+- ElevenLabs-powered read-aloud for law summaries and selected text, with browser speech as fallback
 - interactive civic education features such as the Safety Guide, Law Workflow, Court Simulator, and Bill Simulator
 
 ## How we built it
@@ -27,6 +28,8 @@ It also includes:
 We built CulturAct as a React + TypeScript application with a Node/Vite server. The frontend uses `react-leaflet` for the map experience and Firebase for auth and Firestore-backed persistence. The backend aggregates legislation from Congress.gov, Federal Register, GovInfo, OpenStates, local public sources, Google Civic, official House/Senate vote sources, and the U.S. Census ACS API.
 
 Gemini powers the app's plain-language summaries, comparisons, advocacy-letter generation, translation pipeline, and assistant experiences. That mattered especially for turning dense policy language into something that people from different linguistic and cultural backgrounds could actually use. We also deployed the app on Vultr using Ubuntu, PM2, and Nginx.
+
+For accessibility and language support, we added ElevenLabs-based read-aloud so users can listen to law summaries and highlighted text. We also included a Solana Anchor workspace (`SoH`) for on-chain civic-action recording, designed for flows like proof of signing a petition, recording participation, or issuing future wallet-based civic badges.
 
 ## Challenges we ran into
 
@@ -43,9 +46,11 @@ Gemini powers the app's plain-language summaries, comparisons, advocacy-letter g
 - Added multilingual support including Farsi.
 - Added Census-backed demographic context to the map.
 - Added live representative lookup and official recent voting history.
+- Added ElevenLabs read-aloud with automatic browser fallback.
 - Deployed the project to Vultr and got the full stack running behind Nginx with PM2.
 - Built interactive civic learning modules, not just a feed reader.
 - Framed legislation through culture-centered issue areas so the product speaks to identity, language, heritage, and belonging instead of treating policy as abstract bureaucracy.
+- Added a Solana Anchor workspace for verifiable civic-action flows instead of limiting the project to traditional web-only participation.
 
 ## What we learned
 
@@ -64,6 +69,7 @@ Next for CulturAct:
 - add richer demographic overlays from Census data
 - integrate higher-quality voice features and multilingual civic storytelling
 - deepen the culture-focused experience with stronger community narratives, localized impact analysis, and richer language-access workflows
+- connect the Solana civic-actions program to the live React app for wallet-based proof of participation and civic badges
 - move from prototype deployment toward a stricter production runtime
 
 ## Built with
@@ -91,10 +97,12 @@ Next for CulturAct:
 - Official U.S. Senate vote sources
 - Solana
 - Anchor
+- ElevenLabs API
 
 ## Which of the following AI tools did you use this weekend?
 
 - Gemini API
+- ElevenLabs API
 - Generative AI-assisted code iteration and debugging workflows
 
 ## Did you implement a generative AI model or API in your hack this weekend?
@@ -115,9 +123,32 @@ Firebase worked well for quick authentication and persistent user/community data
 
 Vultr was straightforward for getting a full-stack deployment online quickly. Using Ubuntu, PM2, and Nginx gave us enough control for a hackathon deployment without a complicated platform setup.
 
+### ElevenLabs
+
+ElevenLabs made the project more accessible by turning written policy summaries into audio. That mattered for users who prefer listening over reading, for longer legal text, and for multilingual or language-access-oriented use cases. We also built the app so browser speech synthesis remains available as a fallback if ElevenLabs fails or usage is exhausted.
+
 ## Solana / SoH Workspace
 
-This repo also includes a Solana Anchor workspace under [`SoH/`](./SoH). It is intended for culture- and civic-action features such as recording on-chain actions, proof-of-participation flows, or wallet-connected civic badges.
+This repo also includes a Solana Anchor workspace under [`SoH/`](./SoH). In this project, Solana is being used specifically for verifiable civic-action infrastructure rather than generic crypto features.
+
+### How Solana Is Being Utilized
+
+The Solana side of the project is built around the idea of recording meaningful civic participation in a tamper-resistant way.
+
+In CulturAct, Solana is intended to support:
+
+- recording a civic action on-chain, such as signing a petition or completing an advocacy action
+- creating verifiable proof that a user participated in a community or civic workflow
+- supporting future wallet-based civic badges, reputation markers, or participation receipts
+- giving community-oriented actions a durable record beyond a normal web session or centralized database alone
+
+The current Anchor program in `SoH/programs/civic-actions/src/lib.rs` records a user, an action type, and a timestamp in a PDA-backed on-chain account. That means the project already has the foundation for:
+
+- “I signed this petition”
+- “I completed this civic action”
+- “I participated in this public-interest workflow”
+
+This makes Solana useful here not as a speculative feature, but as a way to make civic participation portable, transparent, and verifiable.
 
 ### What `SoH` Contains
 
@@ -427,6 +458,7 @@ Optional:
 
 - `GOOGLE_CIVIC_API_KEY`
 - `CENSUS_API_KEY`
+- `ELEVENLABS_API_KEY`
 - `MEETUP_API_KEY`
 - `APP_URL`
 
