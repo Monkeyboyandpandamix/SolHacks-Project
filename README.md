@@ -411,6 +411,22 @@ npm run build
 
 The app was deployed to a Vultr Ubuntu server and run behind Nginx with PM2.
 
+### How Vultr Is Being Utilized
+
+Vultr is the cloud infrastructure layer for CulturAct. We use it to host the full-stack application in a single deployable environment where the Node/Vite server, API aggregation logic, and reverse proxy all run together.
+
+In this project, Vultr is used for:
+
+- hosting the production Ubuntu server that runs the app
+- serving the web app publicly through a stable public IP
+- running the Node application process through PM2 for persistence and restarts
+- fronting the app with Nginx as a reverse proxy
+- centralizing the backend API orchestration that talks to Congress.gov, GovInfo, OpenStates, Google Civic, House/Senate vote sources, Meetup, and the U.S. Census API
+- keeping environment variables and deployment configuration on the server rather than in the client
+- giving us a straightforward path to scale into a more production-ready deployment later
+
+Vultr is especially useful here because CulturAct depends on multiple external APIs, live data fetching, server-side aggregation, and deployment control that would be harder to manage in a purely static frontend setup.
+
 ### Server Setup
 
 - Provider: Vultr
@@ -486,6 +502,44 @@ server {
 - The current PM2 command uses `npm run dev`, which is acceptable for a prototype/demo deployment.
 - For a stricter production setup, a dedicated production server command is recommended.
 - The server should keep `.env` out of version control and store all API keys only on the deployed host.
+
+### Updating The Live Vultr Deployment
+
+To push new updates to the live site hosted on Vultr:
+
+```bash
+ssh root@YOUR_SERVER_IP
+cd /root/SolHacks-Project
+git pull origin main
+npm install
+npm run build
+pm2 restart culturact
+pm2 save
+```
+
+If you update Nginx configuration:
+
+```bash
+nginx -t
+systemctl restart nginx
+```
+
+Quick verification after deploying changes:
+
+```bash
+pm2 status
+curl http://127.0.0.1:3000
+curl http://YOUR_SERVER_IP
+```
+
+Recommended update workflow:
+
+1. Push code changes to GitHub from your local machine.
+2. SSH into the Vultr server.
+3. Run `git pull origin main`.
+4. Rebuild with `npm run build`.
+5. Restart the app with `pm2 restart culturact`.
+6. Verify the site through PM2, local curl, and the public URL.
 
 ## Deploy Firestore Rules
 
