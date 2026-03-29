@@ -9,6 +9,7 @@ interface RepresentativeCardProps {
 
 const RepresentativeCard: React.FC<RepresentativeCardProps> = ({ representative }) => {
   const [showVotingRecord, setShowVotingRecord] = useState(false);
+  const isFallbackVotingSnapshot = representative.votingRecordSource === 'fallback';
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="group relative overflow-hidden rounded-[40px] border-2 border-slate-50 bg-white p-8 shadow-xl shadow-slate-200/50 transition-all hover:scale-[1.02] hover:border-indigo-600">
@@ -68,7 +69,7 @@ const RepresentativeCard: React.FC<RepresentativeCardProps> = ({ representative 
             onClick={() => setShowVotingRecord((prev) => !prev)}
             className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-indigo-600 transition hover:bg-indigo-50"
           >
-            Voting record snapshot
+            {isFallbackVotingSnapshot ? 'Representative snapshot' : 'Voting record snapshot'}
             {showVotingRecord ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
         )}
@@ -76,7 +77,14 @@ const RepresentativeCard: React.FC<RepresentativeCardProps> = ({ representative 
 
       {representative.votingRecord && representative.votingRecord.length > 0 && showVotingRecord && (
         <div className="mt-6 rounded-3xl border border-slate-100 bg-slate-50 p-5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Voting Record Snapshot</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            {isFallbackVotingSnapshot ? 'Representative Snapshot' : 'Voting Record Snapshot'}
+          </p>
+          {isFallbackVotingSnapshot && (
+            <p className="mt-2 text-[11px] font-bold leading-relaxed text-slate-500">
+              Official recent roll-call history is unavailable, so this card shows an app-generated civic positioning snapshot for context.
+            </p>
+          )}
           <div className="mt-4 space-y-3">
             {representative.votingRecord.map((record) => (
               <div key={record.billTitle} className="rounded-2xl bg-white p-4 shadow-sm">

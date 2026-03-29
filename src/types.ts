@@ -130,6 +130,7 @@ export interface Representative {
   channels?: { type: string; id: string }[];
   sponsoredBills: string[]; // IDs of bills
   votingRecord?: RepresentativeVoteRecord[];
+  votingRecordSource?: 'official' | 'fallback';
 }
 
 export interface Notification {

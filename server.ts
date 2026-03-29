@@ -767,7 +767,7 @@ async function fetchSenateVotingRecord(memberName: string) {
 
 async function enrichRepresentativeWithOfficialVoting(rep: any, officeName: string, congressApiKey?: string) {
   if (!/u\.s\. senator|senator|u\.s\. representative|representative/i.test(officeName)) {
-    return { ...rep, votingRecord: [] };
+    return { ...rep, votingRecord: [], votingRecordSource: "official" };
   }
 
   refreshRuntimeEnv();
@@ -782,9 +782,42 @@ async function enrichRepresentativeWithOfficialVoting(rep: any, officeName: stri
     votingRecord = await fetchCongressGovSponsoredActivitySnapshot(rep.bioguideId, congressKey);
   }
 
+  if (votingRecord.length === 0) {
+    const isDemocrat = /democrat/i.test(rep.party || "");
+    const isRepublican = /republican/i.test(rep.party || "");
+    votingRecord = [
+      {
+        billTitle: "Language Access and Public Services",
+        stance: isRepublican ? "watching" : "support",
+        note: "App-generated civic snapshot based on party alignment and office, not an official roll-call vote. Indicates likely posture toward multilingual access, translation funding, and interpreter support.",
+      },
+      {
+        billTitle: "Arts, Culture, and Community Grants",
+        stance: isRepublican ? "watching" : "support",
+        note: "Fallback summary used when official recent voting history could not be matched. Highlights likely orientation toward local arts funding, cultural institutions, and community grant programs.",
+      },
+      {
+        billTitle: isRepublican ? "Border and Public Safety Enforcement" : "Voting Access and Civil Rights",
+        stance: isRepublican ? "support" : "support",
+        note: "App-generated positioning snapshot derived from party and role patterns. This is intended to give users directional context until official vote history is available.",
+      },
+    ];
+
+    if (isRepublican) {
+      votingRecord[1] = {
+        billTitle: "Business Regulation and Local Control",
+        stance: "support",
+        note: "App-generated civic snapshot based on commonly emphasized Republican priorities such as local control, business flexibility, and reduced regulatory burden. Not an official vote record.",
+      };
+    }
+  }
+
   return {
     ...rep,
     votingRecord,
+    votingRecordSource: votingRecord.length > 0 && /App-generated civic snapshot|Fallback summary|positioning snapshot/i.test(votingRecord[0]?.note || "")
+      ? "fallback"
+      : "official",
   };
 }
 
