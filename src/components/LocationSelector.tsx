@@ -148,6 +148,11 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
     { id: 'fr', label: 'Français' },
     { id: 'ko', label: '한국어' },
     { id: 'ru', label: 'Русский' },
+    { id: 'fa', label: 'فارسی' },
+    { id: 'hi', label: 'हिन्दी' },
+    { id: 'sw', label: 'Kiswahili' },
+    { id: 'ta', label: 'தமிழ்' },
+    { id: 'si', label: 'සිංහල' },
   ];
 
   return (

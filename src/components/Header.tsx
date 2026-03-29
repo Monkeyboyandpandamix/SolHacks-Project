@@ -20,7 +20,12 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
     { id: 'tl', label: 'Tagalog' },
     { id: 'vi', label: 'Tiếng Việt' },
     { id: 'ar', label: 'العربية' },
-    { id: 'fr', label: 'Français' }
+    { id: 'fr', label: 'Français' },
+    { id: 'fa', label: 'فارسی' },
+    { id: 'hi', label: 'हिन्दी' },
+    { id: 'sw', label: 'Kiswahili' },
+    { id: 'ta', label: 'தமிழ்' },
+    { id: 'si', label: 'සිංහල' }
   ];
   const unreadCount = notifications.filter(n => !n.read).length;
 

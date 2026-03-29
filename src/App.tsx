@@ -140,7 +140,8 @@ export default function App() {
     const langMap: Record<string, string> = {
       "English": "en", "Spanish": "es", "Chinese": "zh-CN", "Myanmar": "my",
       "Tagalog": "tl", "Vietnamese": "vi", "Arabic": "ar", "French": "fr",
-      "Korean": "ko", "Russian": "ru"
+      "Korean": "ko", "Russian": "ru", "Farsi": "fa", "Hindi": "hi",
+      "Swahili": "sw", "Tamil": "ta", "Sinhalese": "si"
     };
 
     let defaultLang = "en";
