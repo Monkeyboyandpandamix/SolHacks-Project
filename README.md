@@ -317,14 +317,14 @@ That means:
 - U.S. Census ACS-backed state heat map intensity
 - Firebase Auth, Firestore caching, and community chat
 - Community tab with events, neighborhood chat, translators, shelters, legal help, and immigration resources
-- Analytics, map, saved laws, digest, AI assistant, and Safety Guide views
+- Analytics, map, saved items, digest, AI assistant, and Safety Guide views
 
 ## App Features
 
 ### Navigation Tabs
 
 - Feed
-- Saved Content
+- Saved
 - Profile
 - Map View
 - Weekly Digest

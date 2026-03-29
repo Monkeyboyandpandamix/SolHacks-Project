@@ -630,7 +630,7 @@ export async function chatWithLawyer(history: ChatMessage[], message: string, co
   const normalizedHistory = history.length > 0 && history[history.length - 1]?.role === "user" && history[history.length - 1]?.text === message
     ? history
     : [...history, { role: "user", text: message }];
-  const fallback = `Based on the laws currently loaded, compare status, jurisdiction, and who is affected. ${userSituation ? `Given your situation, focus on eligibility, costs, and deadlines. ` : ""}Ask about one law at a time for the clearest answer.`;
+  const fallback = `I could not get a fresh Gemini response for "${message}". Try asking about one specific law title, status change, or how a bill affects your situation${userSituation ? ` (${userSituation})` : ""}.`;
   const response = await postAi<{ reply?: string }>("/api/ai/chat", { history: normalizedHistory, message, context, userSituation });
   return response?.reply || fallback;
 }

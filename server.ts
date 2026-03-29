@@ -66,6 +66,34 @@ function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function rankRelevantLaws(message: string, context: any[]) {
+  const queryTerms = new Set(
+    normalizeSearchText(message)
+      .split(" ")
+      .filter((term) => term.length > 2)
+  );
+
+  if (queryTerms.size === 0) {
+    return context.slice(0, 6);
+  }
+
+  return [...context]
+    .map((law) => {
+      const haystack = normalizeSearchText(
+        `${law.title || ""} ${law.simplifiedSummary || ""} ${law.impact || ""} ${law.category || ""} ${law.status || ""}`
+      );
+      const score = [...queryTerms].reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+      return { law, score };
+    })
+    .sort((left, right) => right.score - left.score)
+    .map(({ law }) => law)
+    .slice(0, 6);
+}
+
 function hasAlphaTitle(value: string) {
   return /[A-Za-z]/.test(value);
 }
@@ -1452,16 +1480,37 @@ Return only the completed letter.`);
   app.post("/api/ai/chat", async (req, res) => {
     const history = Array.isArray(req.body?.history) ? req.body.history : [];
     const context = Array.isArray(req.body?.context) ? req.body.context : [];
+    const message = String(req.body?.message || "");
     const userSituation = String(req.body?.userSituation || "");
     if (!ai) return res.json({ reply: "" });
     try {
-      const conversation = history.map((item: any) => `${item.role === "user" ? "User" : "Assistant"}: ${String(item.text || "")}`).join("\n");
+      const recentHistory = history.slice(-8);
+      const conversation = recentHistory
+        .map((item: any) => `${item.role === "user" ? "User" : "Assistant"}: ${String(item.text || "")}`)
+        .join("\n");
+      const relevantContext = rankRelevantLaws(message, context).map((law: any) => ({
+        id: law.id,
+        title: law.title,
+        category: law.category,
+        status: law.status,
+        level: law.level,
+        summary: law.simplifiedSummary,
+        impact: law.impact,
+      }));
       const reply = await generateAiText(`You are the CulturAct assistant.
+Answer the user's latest question directly and specifically.
+Do not repeat your generic introduction.
+Do not repeat earlier wording unless it is necessary.
+If relevant, mention specific law titles and why they matter.
+If the question is broad, answer in 2-4 short paragraphs or a short bullet list.
 ${userSituation ? `The user's situation is: "${userSituation}".` : ""}
-Use these laws as context: ${JSON.stringify(context.map((l: any) => ({ id: l.id, title: l.title, summary: l.simplifiedSummary, impact: l.impact, status: l.status })))}
-Conversation so far:
+Most relevant loaded laws:
+${JSON.stringify(relevantContext)}
+Recent conversation:
 ${conversation}
-Assistant:`);
+Latest user question:
+${message}
+Assistant response:`);
       res.json({ reply: reply || "" });
     } catch (error: any) {
       console.error("AI chat error:", error.message);
