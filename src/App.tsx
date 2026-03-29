@@ -32,13 +32,14 @@ import {
   UsersRound
 } from 'lucide-react';
 import Header from './components/Header';
-import LocationSelector, { STATE_FLAGS, STATE_ABBR } from './components/LocationSelector';
+import LocationSelector, { STATE_FLAGS, STATE_ABBR, getFlagUrl } from './components/LocationSelector';
 import LawFeed from './components/LawFeed';
 import LawCard from './components/LawCard';
 import CompareLaws from './components/CompareLaws';
 import MapView from './components/MapView';
 import RoadmapView from './components/RoadmapView';
 import AnalyticsView from './components/AnalyticsView';
+import CourtSimulator from './components/CourtSimulator';
 import RepresentativeCard from './components/RepresentativeCard';
 import AILawyer from './components/AILawyer';
 import AskAIFloatingButton from './components/AskAIFloatingButton';
@@ -147,7 +148,7 @@ export default function App() {
   const [laws, setLaws] = useState<Law[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics' | 'community'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics' | 'community' | 'simulation'>('feed');
   const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'county' | 'city'>('all');
   const [interestFilter, setInterestFilter] = useState<string>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -582,6 +583,7 @@ export default function App() {
             { id: 'analytics', icon: BarChart3, label: 'ANALYTICS' },
             { id: 'community', icon: UsersRound, label: 'COMMUNITY' },
             { id: 'roadmap', icon: History, label: 'ROADMAP' },
+            { id: 'simulation', icon: Scale, label: 'COURT SIMULATOR' },
           ].map(tab => (
             <button 
               key={tab.id}
@@ -626,7 +628,7 @@ export default function App() {
         </div>
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md p-6 border-t border-slate-100">
+        <div className="absolute bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md p-6 border-t border-slate-100">
           {user ? (
             <div className="flex items-center gap-4 rounded-3xl bg-slate-50 p-4 border border-slate-100">
               <div className="h-10 w-10 rounded-2xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 font-black text-sm">
@@ -643,8 +645,14 @@ export default function App() {
             <div className="space-y-4">
               <button 
                 onClick={signIn}
-                className="flex w-full items-center justify-center gap-3 rounded-3xl bg-indigo-600 py-5 text-xs font-black text-white shadow-xl shadow-indigo-200 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                className="flex w-full items-center justify-center gap-3 rounded-3xl bg-white border border-slate-200 py-5 text-xs font-black text-slate-700 shadow-xl shadow-slate-100 transition-all hover:scale-[1.02] hover:bg-slate-50 active:scale-[0.98]"
               >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.92C17.66 15.63 16.88 16.81 15.69 17.61V20.34H19.26C21.35 18.42 22.56 15.6 22.56 12.25Z" fill="#4285F4"/>
+                  <path d="M12 23C14.97 23 17.46 22.02 19.26 20.34L15.69 17.61C14.71 18.27 13.46 18.67 12 18.67C9.17 18.67 6.78 16.76 5.89 14.19H2.21V17.04C4.01 20.62 7.69 23 12 23Z" fill="#34A853"/>
+                  <path d="M5.89 14.19C5.66 13.51 5.53 12.77 5.53 12C5.53 11.23 5.66 10.49 5.89 9.81V6.96H2.21C1.47 8.44 1.05 10.16 1.05 12C1.05 13.84 1.47 15.56 2.21 17.04L5.89 14.19Z" fill="#FBBC05"/>
+                  <path d="M12 5.33C13.62 5.33 15.06 5.89 16.2 6.98L19.34 3.84C17.45 2.08 14.97 1 12 1C7.69 1 4.01 3.38 2.21 6.96L5.89 9.81C6.78 7.24 9.17 5.33 12 5.33Z" fill="#EA4335"/>
+                </svg>
                 SIGN IN WITH GOOGLE
               </button>
             </div>
@@ -680,6 +688,12 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-8">
+            <div className="flex items-center gap-2 rounded-2xl bg-amber-50 px-4 py-2 border border-amber-100 shadow-sm transition-all hover:scale-105 cursor-default select-none hidden sm:flex" title="Civic Action Streak">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 text-white shadow-inner">
+                 <Zap size={14} fill="currentColor" />
+              </span>
+              <span className="text-sm font-black text-amber-600">5 <span className="text-[10px] opacity-70 ml-0.5">DAY STREAK</span></span>
+            </div>
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative rounded-2xl p-3 text-slate-400 transition-all hover:bg-slate-100 hover:text-indigo-600"
@@ -923,7 +937,7 @@ export default function App() {
                     <p className="mt-2 text-sm font-bold flex items-center gap-2 text-slate-400">
                       Here's your community-impact feed for
                       {STATE_FLAGS[settings.location.state] && (
-                        <img src={`https://flagcdn.com/w20/${STATE_FLAGS[settings.location.state]}.png`} srcSet={`https://flagcdn.com/w40/${STATE_FLAGS[settings.location.state]}.png 2x`} width="20" alt={`${settings.location.state} flag`} className="rounded-sm shadow-sm" />
+                        <img src={getFlagUrl(STATE_FLAGS[settings.location.state], 20)} srcSet={`${getFlagUrl(STATE_FLAGS[settings.location.state], 40)} 2x`} width="20" alt={`${settings.location.state} flag`} className="rounded-sm shadow-sm" />
                       )}
                       <span>
                         {settings.location.city?.trim() ? `${settings.location.city}, ${settings.location.state} (${STATE_ABBR[settings.location.state]})` : `${settings.location.state} (${STATE_ABBR[settings.location.state]})`}.
@@ -1236,6 +1250,17 @@ export default function App() {
                 exit={{ opacity: 0, y: -20 }}
               >
                 <RoadmapView />
+              </motion.div>
+            )}
+
+            {activeTab === 'simulation' && (
+              <motion.div 
+                key="simulation"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <CourtSimulator />
               </motion.div>
             )}
           </AnimatePresence>
