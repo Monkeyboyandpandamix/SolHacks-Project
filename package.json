@@ -8,7 +8,11 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "solana:install": "cd SoH && npm install",
+    "solana:build": "cd SoH && npm run build",
+    "solana:test": "cd SoH && npm run test",
+    "solana:client": "cd SoH && npm run client"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

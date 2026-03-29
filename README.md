@@ -89,6 +89,8 @@ Next for CulturAct:
 - U.S. Census ACS API
 - Official House Clerk vote sources
 - Official U.S. Senate vote sources
+- Solana
+- Anchor
 
 ## Which of the following AI tools did you use this weekend?
 
@@ -112,6 +114,55 @@ Firebase worked well for quick authentication and persistent user/community data
 ### Vultr
 
 Vultr was straightforward for getting a full-stack deployment online quickly. Using Ubuntu, PM2, and Nginx gave us enough control for a hackathon deployment without a complicated platform setup.
+
+## Solana / SoH Workspace
+
+This repo also includes a Solana Anchor workspace under [`SoH/`](./SoH). It is intended for culture- and civic-action features such as recording on-chain actions, proof-of-participation flows, or wallet-connected civic badges.
+
+### What `SoH` Contains
+
+- `SoH/programs/civic-actions/src/lib.rs`: Anchor program for recording civic actions
+- `SoH/tests/anchor.ts`: Anchor test for PDA-based civic action creation
+- `SoH/client/client.ts`: simple client script for checking provider, program ID, and wallet balance
+
+### Local Solana Setup Commands
+
+From the repo root:
+
+```bash
+npm run solana:install
+npm run solana:build
+npm run solana:test
+npm run solana:client
+```
+
+Directly inside `SoH/`:
+
+```bash
+cd SoH
+npm install
+anchor build
+anchor test
+npm run client
+```
+
+### Solana Prerequisites
+
+You will need:
+
+- Solana CLI configured
+- Anchor CLI installed
+- a local keypair at `~/.config/solana/id.json`
+- local validator or the appropriate Anchor provider target
+
+Example Solana configuration:
+
+```bash
+solana config set --url https://api.devnet.solana.com
+solana config get
+solana airdrop 2
+solana balance
+```
 
 ## Current Scope
 
@@ -540,6 +591,23 @@ Recommended update workflow:
 4. Rebuild with `npm run build`.
 5. Restart the app with `pm2 restart culturact`.
 6. Verify the site through PM2, local curl, and the public URL.
+
+### Pushing `SoH` Solana Updates To Vultr
+
+If you update the Solana workspace too:
+
+```bash
+ssh root@YOUR_SERVER_IP
+cd /root/SolHacks-Project
+git pull origin main
+cd SoH
+npm install
+anchor build
+cd /root/SolHacks-Project
+pm2 restart culturact
+```
+
+If Anchor is not yet installed on the server, install the Solana/Anchor toolchain first. For most app-only updates, you do not need to rebuild `SoH`, but for any change under `SoH/programs`, `SoH/tests`, or `SoH/client`, you should.
 
 ## Deploy Firestore Rules
 
