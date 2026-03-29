@@ -682,6 +682,31 @@ export async function moderateComment(text: string): Promise<{ approved: boolean
   return { approved: true };
 }
 
+function buildRepresentativeSnapshot(party: string): Representative["votingRecord"] {
+  const isDemocrat = /democrat/i.test(party);
+  const isRepublican = /republican/i.test(party);
+
+  return [
+    {
+      billTitle: "Language Access and Public Services",
+      stance: isRepublican ? "watching" : "support",
+      note: "App-generated civic snapshot used when recent official voting history is unavailable. Indicates likely posture toward translation access, interpreter services, and multilingual public-service support.",
+    },
+    {
+      billTitle: isRepublican ? "Business Regulation and Local Control" : "Arts, Culture, and Community Grants",
+      stance: isRepublican ? "support" : "support",
+      note: isRepublican
+        ? "Fallback civic positioning snapshot based on commonly emphasized Republican priorities such as local control, business flexibility, and reduced regulatory burden."
+        : "Fallback civic positioning snapshot based on commonly emphasized Democratic support for public arts funding, cultural institutions, and community grant programs.",
+    },
+    {
+      billTitle: isRepublican ? "Border and Public Safety Enforcement" : "Voting Access and Civil Rights",
+      stance: "support",
+      note: "App-generated context card, not an official roll-call record. Added so users still get directional context when recent matched voting history is unavailable.",
+    },
+  ];
+}
+
 export function getRepresentativesForLocation(state: string, laws: Law[]): Representative[] {
   const topBills = laws.slice(0, 3).map(law => law.id);
   const byState: Record<string, Representative[]> = {
@@ -697,6 +722,8 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.padilla.senate.gov"],
         channels: [{ type: "Twitter", id: "AlexPadilla4CA" }],
         sponsoredBills: topBills,
+        votingRecord: buildRepresentativeSnapshot("Democrat"),
+        votingRecordSource: "fallback",
       },
       {
         id: "ca-sen-schiff",
@@ -709,6 +736,8 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.schiff.senate.gov"],
         channels: [{ type: "Twitter", id: "SenAdamSchiff" }],
         sponsoredBills: topBills,
+        votingRecord: buildRepresentativeSnapshot("Democrat"),
+        votingRecordSource: "fallback",
       },
       {
         id: "ca-house-lookup",
@@ -731,6 +760,8 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.tillis.senate.gov"],
         channels: [{ type: "Twitter", id: "SenThomTillis" }],
         sponsoredBills: topBills,
+        votingRecord: buildRepresentativeSnapshot("Republican"),
+        votingRecordSource: "fallback",
       },
       {
         id: "nc-sen-budd",
@@ -743,6 +774,8 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
         urls: ["https://www.budd.senate.gov"],
         channels: [{ type: "Twitter", id: "SenTedBuddNC" }],
         sponsoredBills: topBills,
+        votingRecord: buildRepresentativeSnapshot("Republican"),
+        votingRecordSource: "fallback",
       },
       {
         id: "nc-house-lookup",
@@ -761,6 +794,8 @@ export function getRepresentativesForLocation(state: string, laws: Law[]): Repre
     party: "Nonpartisan",
     urls: ["https://www.usa.gov/elected-officials"],
     sponsoredBills: topBills,
+    votingRecord: buildRepresentativeSnapshot("Nonpartisan"),
+    votingRecordSource: "fallback",
   }];
 }
 
