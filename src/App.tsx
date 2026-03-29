@@ -690,7 +690,7 @@ export default function App() {
           <nav className="space-y-3">
             {[
               { id: 'feed', icon: LayoutDashboard, label: 'LEGISLATIVE FEED' },
-              { id: 'saved', icon: Bookmark, label: 'SAVED LAWS' },
+              { id: 'saved', icon: Bookmark, label: 'SAVED' },
               { id: 'map', icon: Map, label: 'MAP VIEW' },
               { id: 'digest', icon: Zap, label: 'WEEKLY DIGEST' },
               { id: 'profile', icon: UserIcon, label: 'MY PROFILE' },
@@ -1129,7 +1129,7 @@ export default function App() {
                 exit={{ opacity: 0, y: -20 }}
               >
                 <div className="mb-10">
-                  <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Saved Content</h2>
+                  <h2 className="text-4xl font-black tracking-tighter text-indigo-950">Saved</h2>
                   <p className="mt-2 font-bold text-slate-400">Keep track of the legislation that matters most to you.</p>
                 </div>
                 {savedLaws.length > 0 ? (
@@ -1153,7 +1153,7 @@ export default function App() {
                   <div className="flex h-96 flex-col items-center justify-center gap-6 rounded-[40px] border-4 border-dashed border-slate-100 bg-white text-slate-400">
                     <Bookmark size={64} className="opacity-10" />
                     <div className="text-center">
-                      <p className="text-xl font-black text-slate-900">No saved laws yet</p>
+                      <p className="text-xl font-black text-slate-900">Nothing saved yet</p>
                       <p className="mt-1 font-bold">Start exploring the feed to bookmark important legislation.</p>
                     </div>
                     <button

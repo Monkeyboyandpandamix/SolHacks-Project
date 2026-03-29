@@ -270,12 +270,19 @@ export ANCHOR_WALLET="$HOME/.config/solana/id.json"
 2. Click the wallet connect button.
 3. Connect Phantom or Solflare on **devnet**.
 4. Optionally request devnet SOL if the wallet needs test funds.
-5. Pick one of the civic action buttons.
-6. Approve the transaction in the wallet.
-7. Open the returned Explorer link to verify the action receipt.
-8. Use the same panel to refresh and view the wallet's recorded civic actions.
+5. If the wallet is low on devnet SOL, the app will also try to auto-request a smaller airdrop before recording the action.
+6. Pick one of the civic action buttons.
+7. Approve the transaction in the wallet.
+8. Open the returned Explorer link to verify the action receipt.
+9. Use the same panel to refresh and view the wallet's recorded civic actions.
 
 If the program is not deployed, the wallet transaction will fail. The frontend expects the `civic_actions` Anchor program to be deployed on devnet at the configured program ID.
+
+If the public devnet faucet is rate-limiting requests, fund the wallet manually first:
+
+```bash
+solana airdrop 2 8YTs2gVQ8aBEucgwv2DGnkNA8phpnw9jZFhEdM75hmKp --url https://api.devnet.solana.com
+```
 
 ### Solana Verification Status
 
@@ -298,6 +305,7 @@ That means:
 - the CLI client can reach the deployed program on devnet
 - the React app is wired to the real program shape
 - the frontend wallet flow is connected to the live Solana program, not just a placeholder interface
+- the app can auto-attempt devnet funding before sending a civic action transaction
 
 ## Current Scope
 
@@ -742,10 +750,45 @@ cd SoH
 npm install
 anchor build
 cd /root/SolHacks-Project
+npm install
+npm run build
 pm2 restart culturact
+pm2 save
 ```
 
-If Anchor is not yet installed on the server, install the Solana/Anchor toolchain first. For most app-only updates, you do not need to rebuild `SoH`, but for any change under `SoH/programs`, `SoH/tests`, or `SoH/client`, you should.
+If Anchor is not yet installed on the server, install the Solana/Anchor toolchain first. For most app-only updates, you do not need to rebuild `SoH`, but for any change under `SoH/programs`, `SoH/tests`, `SoH/client`, or the Solana app wiring files, you should.
+
+### Exact Commands For The Latest Solana Push
+
+From this machine:
+
+```bash
+cd /Users/mohammadaghamohammadi/Desktop/Projects/SolHacks-Project-main
+git add README.md SoH/Anchor.toml SoH/Cargo.toml SoH/client/client.ts SoH/client/frontend/src/App.tsx SoH/client/frontend/src/main.tsx SoH/client/frontend/src/programClient.ts SoH/package.json SoH/programs/civic-actions/Cargo.toml src/components/SolanaCivicActions.tsx src/solana/config.ts SoH/Cargo.lock SoH/client/programConfig.ts SoH/package-lock.json
+git commit -m "Finalize Solana flow and improve devnet funding fallback"
+git push origin main
+```
+
+On Vultr:
+
+```bash
+ssh root@YOUR_SERVER_IP
+cd /root/SolHacks-Project
+git pull origin main
+npm install
+npm run build
+pm2 restart culturact
+pm2 save
+```
+
+If you also want the `SoH` workspace refreshed on the server:
+
+```bash
+ssh root@YOUR_SERVER_IP
+cd /root/SolHacks-Project/SoH
+npm install
+anchor build
+```
 
 ## Deploy Firestore Rules
 
