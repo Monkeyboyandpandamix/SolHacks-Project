@@ -138,23 +138,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
     "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "Washington D.C.", "West Virginia", "Wisconsin", "Wyoming"
   ];
 
-  const languages = [
-    { id: 'en', label: 'English' },
-    { id: 'es', label: 'Español' },
-    { id: 'zh-CN', label: '中文' },
-    { id: 'my', label: 'မြန်မာ' },
-    { id: 'tl', label: 'Tagalog' },
-    { id: 'vi', label: 'Tiếng Việt' },
-    { id: 'ar', label: 'العربية' },
-    { id: 'fr', label: 'Français' },
-    { id: 'ko', label: '한국어' },
-    { id: 'ru', label: 'Русский' },
-    { id: 'fa', label: 'فارسی' },
-    { id: 'hi', label: 'हिन्दी' },
-    { id: 'sw', label: 'Kiswahili' },
-    { id: 'ta', label: 'தமிழ்' },
-    { id: 'si', label: 'සිංහල' },
-  ];
+  const languages = SUPPORTED_LANGUAGES;
 
   return (
     <div className="card mb-6 p-4">
