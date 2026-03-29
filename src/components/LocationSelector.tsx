@@ -32,7 +32,7 @@ export const STATE_ABBR: Record<string, string> = {
 };
 import { motion, AnimatePresence } from 'motion/react';
 import axios from 'axios';
-import { SUPPORTED_LANGUAGES, normalizeLanguageCode } from '../constants/languages';
+import { normalizeLanguageCode } from '../constants/languages';
 
 interface LocationSelectorProps {
   onLocationChange: (state: string, city: string, language: string) => void;
@@ -138,7 +138,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
     "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", "Washington D.C.", "West Virginia", "Wisconsin", "Wyoming"
   ];
 
-  const languages = SUPPORTED_LANGUAGES;
+
 
   return (
     <div className="card mb-6 p-4">
@@ -243,16 +243,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({ onLocationChange, o
             {interests.map(i => <option key={i.id} value={i.id}>{i.label}</option>)}
           </select>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted">Preferred Language</label>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-            className="rounded-lg border border-border-color bg-transparent px-3 py-2 focus:outline-none focus:ring-2 focus:ring-accent-color"
-          >
-            {languages.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
-          </select>
-        </div>
+
         <div className="md:col-span-2">
           <button
             onClick={handleUpdate}
