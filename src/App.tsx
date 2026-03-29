@@ -572,10 +572,10 @@ export default function App() {
                 <span className="text-black">Cultur</span>
                 <span className="text-indigo-600">Act</span>
               </h1>
-              <p className="text-[10px] font-bold tracking-[0.2em] mt-1.5 flex items-center gap-1">
-                <span className="text-black">COMMUNITY</span>
-                <span className="text-indigo-600">POWERED</span>
-                <span className="text-black">CIVICS</span>
+              <p className="text-[12px] font-bold tracking-[0.2em] mt-1.5 flex items-center gap-1">
+                <span className="text-black">Community</span>
+                <span className="text-indigo-600">Powered</span>
+                <span className="text-black">Civics</span>
               </p>
             </div>
           </div>
