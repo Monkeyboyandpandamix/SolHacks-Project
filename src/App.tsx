@@ -47,6 +47,7 @@ import AILawyer from './components/AILawyer';
 import AskAIFloatingButton from './components/AskAIFloatingButton';
 import CommunityView from './components/CommunityView';
 import ProtestGuide from './components/ProtestGuide';
+import SolanaCivicActions from './components/SolanaCivicActions';
 import { normalizeLanguageCode, SUPPORTED_LANGUAGES } from './constants/languages';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
 import { fetchLaws, fetchRepresentativesForAddress, getRepresentativesForLocation, mergeCanonicalLaws } from './services/geminiService';
@@ -1311,6 +1312,8 @@ export default function App() {
                         ))}
                       </div>
                     </section>
+
+                    <SolanaCivicActions />
                   </div>
 
                   <div className="space-y-12">
