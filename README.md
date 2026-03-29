@@ -28,7 +28,7 @@ This project fits the Culture track because it focuses on how laws shape languag
 - Real OpenStreetMap-based map view for geographic exploration
 - Firebase Auth, Firestore caching, and community chat
 - Community tab with events, neighborhood chat, translators, shelters, legal help, and immigration resources
-- Analytics, map, saved laws, roadmap, digest, and AI assistant views
+- Analytics, map, saved laws, digest, and AI assistant views
 
 ## App Features
 
@@ -41,7 +41,9 @@ This project fits the Culture track because it focuses on how laws shape languag
 - Weekly Digest
 - Analytics
 - Community
-- Roadmap
+- Law Workflow
+- Court Simulator
+- Bill Simulator
 
 ### Legislative Feed
 
@@ -98,7 +100,9 @@ This project fits the Culture track because it focuses on how laws shape languag
 - Map-based exploration with OpenStreetMap
 - Clickable state and federal map markers that filter the current feed
 - Weekly Digest snapshot
-- Roadmap / feature status view
+- Law workflow explainer
+- Courtroom simulator
+- Bill simulator
 - In-app notifications for feed and data warnings
 
 ## Key Behaviors

@@ -26,7 +26,6 @@ import {
   AlertCircle,
   Landmark,
   ShieldCheck,
-  History,
   BarChart3,
   XCircle,
   UsersRound,
@@ -41,7 +40,6 @@ import LawFeed from './components/LawFeed';
 import LawCard from './components/LawCard';
 import CompareLaws from './components/CompareLaws';
 import MapView from './components/MapView';
-import RoadmapView from './components/RoadmapView';
 import AnalyticsView from './components/AnalyticsView';
 import CourtSimulator from './components/CourtSimulator';
 import RepresentativeCard from './components/RepresentativeCard';
@@ -152,7 +150,7 @@ export default function App() {
   const [laws, setLaws] = useState<Law[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'roadmap' | 'analytics' | 'community' | 'simulation' | 'workflow' | 'bill_simulator'>('feed');
+  const [activeTab, setActiveTab] = useState<'feed' | 'saved' | 'profile' | 'map' | 'digest' | 'analytics' | 'community' | 'simulation' | 'workflow' | 'bill_simulator'>('feed');
   const [levelFilter, setLevelFilter] = useState<'all' | 'federal' | 'state' | 'county' | 'city'>('all');
   const [interestFilter, setInterestFilter] = useState<string>('all');
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -593,7 +591,6 @@ export default function App() {
             { id: 'profile', icon: UserIcon, label: 'MY PROFILE' },
             { id: 'analytics', icon: BarChart3, label: 'ANALYTICS' },
             { id: 'community', icon: UsersRound, label: 'COMMUNITY' },
-            { id: 'roadmap', icon: History, label: 'ROADMAP' },
             { id: 'workflow', icon: Network, label: 'LAW WORKFLOW' },
             { id: 'simulation', icon: Scale, label: 'COURT SIMULATOR' },
             { id: 'bill_simulator', icon: PlayCircle, label: 'BILL SIMULATOR' },
@@ -1252,17 +1249,6 @@ export default function App() {
                   user={user}
                   userProfile={userProfile}
                 />
-              </motion.div>
-            )}
-
-            {activeTab === 'roadmap' && (
-              <motion.div 
-                key="roadmap"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <RoadmapView />
               </motion.div>
             )}
 
