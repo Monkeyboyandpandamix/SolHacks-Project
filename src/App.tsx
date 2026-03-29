@@ -47,7 +47,7 @@ import AILawyer from './components/AILawyer';
 import AskAIFloatingButton from './components/AskAIFloatingButton';
 import CommunityView from './components/CommunityView';
 import ProtestGuide from './components/ProtestGuide';
-import { normalizeLanguageCode } from './constants/languages';
+import { normalizeLanguageCode, SUPPORTED_LANGUAGES } from './constants/languages';
 import { Law, UserSettings, Notification, Comment, UserProfile, Representative } from './types';
 import { fetchLaws, mergeCanonicalLaws } from './services/geminiService';
 
@@ -757,6 +757,18 @@ export default function App() {
                 <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-rose-500 ring-4 ring-white" />
               )}
             </button>
+            <div className="relative flex items-center gap-2 rounded-2xl bg-slate-50 border border-slate-100 px-3 py-2 transition-all hover:bg-slate-100 hidden sm:flex">
+              <Globe size={18} className="text-indigo-400" />
+              <select
+                value={settings.language}
+                onChange={(e) => handleUpdateSettings({ language: e.target.value })}
+                className="bg-transparent text-xs font-bold text-slate-700 outline-none focus:ring-0 cursor-pointer"
+              >
+                {SUPPORTED_LANGUAGES.map(lang => (
+                  <option key={lang.id} value={lang.id}>{lang.label}</option>
+                ))}
+              </select>
+            </div>
             <button
               onClick={() => setShowSettings(!showSettings)}
               className="rounded-2xl p-3 text-slate-400 transition-all hover:bg-slate-100 hover:text-indigo-600"
