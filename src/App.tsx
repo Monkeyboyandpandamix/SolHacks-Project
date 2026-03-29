@@ -572,8 +572,15 @@ export default function App() {
             <Scale size={28} />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tighter text-indigo-950">CULTURACT</h1>
-            <p className="text-[10px] font-bold tracking-[0.2em] text-slate-400">COMMUNITY POWERED CIVICS</p>
+              <h1 className="text-2xl font-black tracking-tighter flex items-center">
+                <span className="text-black">Cultur</span>
+                <span className="text-indigo-600">Act</span>
+              </h1>
+              <p className="text-[10px] font-bold tracking-[0.2em] mt-1.5 flex items-center gap-1">
+                <span className="text-black">COMMUNITY</span>
+                <span className="text-indigo-600">POWERED</span>
+                <span className="text-black">CIVICS</span>
+              </p>
           </div>
         </div>
 
