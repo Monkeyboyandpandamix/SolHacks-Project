@@ -3,7 +3,7 @@ import { Bookmark, Share2, ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, C
 import { motion, AnimatePresence } from 'motion/react';
 import { Law, Comment } from '../types';
 import { generateAdvocacyLetter } from '../services/geminiService';
-import confetti from 'canvas-confetti';
+import { fireConfetti } from '../utils/confetti';
 
 const JARGON_DICT: Record<string, string> = {
   "ordinance": "A local law or regulation made by a city or town.",
@@ -107,11 +107,11 @@ const LawCard: React.FC<LawCardProps> = ({ law, onSave, onVote, onComment, onPol
     const y = (rect.top + rect.height / 2) / window.innerHeight;
     
     if (type === 'support') {
-      confetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#10b981', '#34d399', '#ffffff'], disableForReducedMotion: true });
+      fireConfetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#10b981', '#34d399', '#ffffff'], disableForReducedMotion: true });
     } else if (type === 'oppose') {
-      confetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#f43f5e', '#fb7185', '#ffffff'], disableForReducedMotion: true });
+      fireConfetti({ particleCount: 30, spread: 50, origin: { x, y }, colors: ['#f43f5e', '#fb7185', '#ffffff'], disableForReducedMotion: true });
     } else if (type === 'save') {
-      confetti({ particleCount: 20, spread: 40, origin: { x, y }, colors: ['#4f46e5', '#818cf8', '#ffffff'], ticks: 100, disableForReducedMotion: true });
+      fireConfetti({ particleCount: 20, spread: 40, origin: { x, y }, colors: ['#4f46e5', '#818cf8', '#ffffff'], ticks: 100, disableForReducedMotion: true });
     }
   };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Scale, MessageSquare, Shield, CheckCircle, XCircle, ChevronRight, User, DollarSign, Zap, RefreshCw, AlertTriangle } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { fireConfetti } from '../utils/confetti';
 
 interface Attorney {
   id: string;
@@ -138,7 +138,7 @@ export default function CourtSimulator() {
 
   const triggerVerdictConfetti = (finalScore: number) => {
     if (finalScore >= 6) {
-      confetti({
+      fireConfetti({
         particleCount: 150,
         spread: 100,
         origin: { y: 0.6 },

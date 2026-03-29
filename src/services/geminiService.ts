@@ -119,6 +119,23 @@ function inferStatus(value?: string): Law["status"] {
   return "proposed";
 }
 
+function looksLikeDateOnly(value?: string) {
+  const text = (value || "").trim();
+  if (!text) return false;
+  return /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4})$/.test(text);
+}
+
+function pickBestNarrativeText(candidates: Array<string | undefined>) {
+  for (const candidate of candidates) {
+    const text = (candidate || "").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    if (looksLikeDateOnly(text)) continue;
+    if (text.length < 12) continue;
+    return text;
+  }
+  return "";
+}
+
 function buildTimeline(date: string, status: Law["status"]): Law["timeline"] {
   const base = [
     { stage: "introduced" as const, date, description: "Legislation was introduced." },
@@ -350,6 +367,12 @@ function createLawFromRaw(input: Partial<Law> & { id: string; title: string; sum
   const category = input.category || inferCategory(input.title, input.summary || input.simplifiedSummary || input.originalText || "");
   const status = input.status || inferStatus(input.originalText || input.summary);
   const timeline = input.timeline || buildTimeline(input.date || new Date().toLocaleDateString(), status);
+  const normalizedSummary = pickBestNarrativeText([
+    input.simplifiedSummary,
+    input.summary,
+    input.originalText,
+    input.impact,
+  ]);
   const votes = input.votes || {
     support: Math.floor(Math.random() * 60) + 20,
     oppose: Math.floor(Math.random() * 25) + 5,
@@ -358,8 +381,8 @@ function createLawFromRaw(input: Partial<Law> & { id: string; title: string; sum
   const law: Law = {
     id: input.id,
     title: input.title,
-    originalText: input.originalText || input.summary || "Official summary unavailable. Review the source link for the full text.",
-    simplifiedSummary: input.simplifiedSummary || input.summary || `${input.title} is a ${status} measure relevant to residents of ${city}, ${state}. It has been added to your feed based on its likely impact. Open the source to review the official language.`,
+    originalText: pickBestNarrativeText([input.originalText, input.summary]) || "Official summary unavailable. Review the source link for the full text.",
+    simplifiedSummary: normalizedSummary || `${input.title} is a ${status} measure relevant to residents of ${city}, ${state}. It has been added to your feed based on its likely impact. Open the source to review the official language.`,
     impact: input.impact || `This ${category.toLowerCase()} measure may affect costs, services, or obligations for people living in ${city}. Monitor status changes and hearing notices if it matches your priorities.`,
     category,
     level: inferLevel(input),
@@ -416,6 +439,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
     const summary =
       bill.abstracts?.[0]?.abstract ||
       bill.extras?._summary ||
+      bill.description ||
       bill.extras?.impact_clause ||
       bill.latest_action_description ||
       "Recent state legislation update.";
@@ -429,6 +453,7 @@ function fallbackFromRawData(rawData: any, state: string, city: string): Law[] {
       id: bill.identifier || bill.id || `STATE-${index}`,
       title: bill.title || bill.identifier || "State legislation update",
       summary,
+      originalText: bill.description || summary,
       level: "state",
       date: bill.updatedAt || bill.updated_at || bill.createdAt || bill.created_at,
       sourceUrl,
