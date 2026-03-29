@@ -10,6 +10,12 @@ export const SUPPORTED_LANGUAGES = [
   { id: 'ko', label: '한국어', aliases: ['korean', '한국어'] },
   { id: 'ru', label: 'Русский', aliases: ['russian', 'русский'] },
   { id: 'fa', label: 'فارسی', aliases: ['farsi', 'persian', 'فارسی'] },
+  { id: 'pl', label: 'Polski', aliases: ['polish', 'polski'] },
+  { id: 'uk', label: 'Українська', aliases: ['ukrainian', 'українська'] },
+  { id: 'am', label: 'አማርኛ', aliases: ['amharic', 'አማርኛ'] },
+  { id: 'ja', label: '日本語', aliases: ['japanese', '日本語'] },
+  { id: 'tr', label: 'Türkçe', aliases: ['turkish', 'türkçe', 'turkce'] },
+  { id: 'de', label: 'Deutsch', aliases: ['german', 'deutsch'] },
 ] as const;
 
 const LANGUAGE_BY_CODE = new Map(SUPPORTED_LANGUAGES.map((language) => [language.id.toLowerCase(), language]));
