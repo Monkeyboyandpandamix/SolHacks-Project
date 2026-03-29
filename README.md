@@ -25,7 +25,7 @@ It also includes:
 
 ## How we built it
 
-We built CulturAct as a React + TypeScript application with a Node/Vite server. The frontend uses `react-leaflet` for the map experience and Firebase for auth and Firestore-backed persistence. The backend aggregates legislation from Congress.gov, Federal Register, GovInfo, OpenStates, local public sources, Google Civic, official House/Senate vote sources, and the U.S. Census ACS API.
+We built CulturAct as a `React` + `TypeScript` application with a Node/Vite server. The frontend uses `react-leaflet` for the map experience and Firebase for auth and Firestore-backed persistence. The backend aggregates legislation from Congress.gov, Federal Register, GovInfo, OpenStates, local public sources, Google Civic, official House/Senate vote sources, and the U.S. Census ACS API.
 
 Gemini powers the app's plain-language summaries, comparisons, advocacy-letter generation, translation pipeline, and assistant experiences. That mattered especially for turning dense policy language into something that people from different linguistic and cultural backgrounds could actually use. We also deployed the app on Vultr using Ubuntu, PM2, and Nginx.
 
@@ -47,11 +47,11 @@ For accessibility and language support, we added ElevenLabs-based read-aloud so 
 - Added Census-backed demographic context to the map.
 - Added live representative lookup and official recent voting history.
 - Added ElevenLabs read-aloud with automatic browser fallback.
-- Deployed the project to Vultr and got the full stack running behind Nginx with PM2.
+- Deployed the project to `Vultr` and got the full stack running behind `Nginx` with `PM2`.
 - Built interactive civic learning modules, not just a feed reader.
 - Framed legislation through culture-centered issue areas so the product speaks to identity, language, heritage, and belonging instead of treating policy as abstract bureaucracy.
-- Connected the Solana Anchor program to the live app so users can record civic participation with a wallet-signed transaction instead of keeping that activity only in a centralized web session.
-- Generated the real Anchor IDL and type artifacts and wired the React app to the actual Solana program shape instead of a mock or placeholder contract layer.
+- Connected the `Solana Anchor` program to the live app so users can record civic participation with a wallet-signed transaction instead of keeping that activity only in a centralized web session.
+- Generated the real `Anchor IDL` and type artifacts and wired the React app to the actual Solana program shape instead of a mock or placeholder contract layer.
 
 ## What we learned
 
