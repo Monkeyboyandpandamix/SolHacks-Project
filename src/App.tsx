@@ -180,6 +180,10 @@ export default function App() {
   const [savedPage, setSavedPage] = useState(1);
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [activeTab]);
+
+  useEffect(() => {
     // Keydown shortcut
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
