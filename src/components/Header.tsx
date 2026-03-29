@@ -29,7 +29,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
         <div className="flex items-center gap-4">
           <div className="hidden items-center gap-2 md:flex">
             <Globe size={18} className="text-muted" />
-            <select 
+            <select
               value={settings.language}
               onChange={(e) => onUpdateSettings({ language: e.target.value })}
               className="rounded-md border border-border-color bg-transparent px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-accent-color"
@@ -41,7 +41,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
           </div>
 
           <div className="relative">
-            <button 
+            <button
               onClick={() => setShowNotifications(!showNotifications)}
               className="relative flex h-9 w-9 items-center justify-center rounded-full border border-border-color hover:bg-gray-100 dark:hover:bg-gray-800"
               title="Notifications"
@@ -56,7 +56,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
 
             <AnimatePresence>
               {showNotifications && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -64,7 +64,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
                 >
                   <div className="flex items-center justify-between border-b border-border-color bg-gray-50 px-4 py-2">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-muted">Notifications</h3>
-                    <button 
+                    <button
                       onClick={onClearAll}
                       className="text-[10px] font-bold text-accent-color hover:underline"
                     >
@@ -74,8 +74,8 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
                   <div className="max-h-64 overflow-y-auto">
                     {notifications.length > 0 ? (
                       notifications.map(n => (
-                        <div 
-                          key={n.id} 
+                        <div
+                          key={n.id}
                           onClick={() => onMarkRead(n.id)}
                           className={`cursor-pointer border-b border-border-color p-3 transition-colors hover:bg-gray-50 ${n.read ? 'opacity-60' : 'bg-accent-color/5'}`}
                         >
@@ -100,7 +100,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
             </AnimatePresence>
           </div>
 
-          <button 
+          <button
             onClick={() => onUpdateSettings({ highContrast: !settings.highContrast })}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border-color hover:bg-gray-100 dark:hover:bg-gray-800"
             title="Toggle High Contrast"
@@ -108,7 +108,7 @@ const Header: React.FC<HeaderProps> = ({ settings, onUpdateSettings, notificatio
             {settings.highContrast ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          <button 
+          <button
             onClick={() => onUpdateSettings({ largeFont: !settings.largeFont })}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-border-color hover:bg-gray-100 dark:hover:bg-gray-800"
             title="Toggle Large Font"
